@@ -1,0 +1,20 @@
+Package: allBART
+Type: Package
+Title: Bayesian Additive Regression Trees for G Computation
+Version: 0.1.0
+Author: person("Yizhen", "Xu", email = "yizhen_xu@brown.com", role = c("aut", "cre"))
+Maintainer: The package maintainer <yizhen_xu@brown.com>
+Description: Bayesian additive regression trees (BART) modeling for G computation. The package can be applied to data with continuous, binary, and multinomial outcomes. Covariates given to the package should be ordinal or binary. The multinomial BART code is written based on the R package MPBART created by Bereket Kindo, with the following changes:
+    Correction on memory leaks
+    Correction on R wrapper for processing data with choice-specific covariates
+    SWAP and CHANGE are available (besides BIRTH and PRUNE) for Bayesian tree sampling
+    Correction on conditional moments for gibbs sampling of multivariate normal variables
+    Correction on imposed constraints for sampling latent variables conditional on observed outcomes
+    Correction on sampling covariace variance matrix of the latent variables based on Jiao & van Dyk 2015, and correction on the posterior scale matrix 
+    Correction on the data augmention of the covariace variance matrix of the latent variables 
+License: GPL (>= 2)
+Encoding: UTF-8
+LazyData: true
+LinkingTo: Rcpp
+Imports: Rcpp
+RoxygenNote: 6.0.1
