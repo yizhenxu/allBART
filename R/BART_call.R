@@ -2,9 +2,9 @@
 #'
 #'Bayesian Additive Regression Trees Modeling for Continuous Outcome,
 #'@param formula response ~ covariates,
-#'@param train.data Training Data with the response,
+#'@param data Training Data with the response,
 #'@param test.data Test Data, typically without the response,
-#'@param Prior List of Priors for MPBART: e.g., Prior = list(nu=3,sigq=0.9, ntrees=200,  kfac=2.0, pswap=0,  pbd=1.0, pb=0.5 , beta = 2.0, alpha = 0.95, nc = 100, priorindep = FALSE,  minobsnode = 10).
+#'@param Prior List of Priors for MPBART: e.g., Prior = list(nu=3,sigq=0.9, ntrees=200,  kfac=2.0, pswap=0,  pbd=1.0, pb=0.5 , beta = 2.0, alpha = 0.95, nc = 100, minobsnode = 10).
 #'The components of Prior are
 #' \itemize{
 #'\item nu: The degree of freedom in the inverse chi-square prior distribution of the error variance.
@@ -17,7 +17,6 @@
 #'\item alpha : The prior probability of a bottom node splits is alpha/(1+d)^beta, d is depth of node.
 #'\item beta : see alpha.
 #'\item nc : The number of equally spaced cutpoints between min and max for each covariate.
-#'\item priorindep
 #'\item minobsnode : The minimum number of observations in bottom nodes for birth in simulating trees.
 #'}
 #'@param Mcmc List of MCMC starting values, burn-in ...: e.g.,     list(burn = 100, ndraws = 1000)
@@ -26,6 +25,28 @@
 #'@return samp_train ndraws x n posterior matrix of the training data outcome,
 #'@return samp_test ndraws x testn posterior matrix of the test data outcome,
 #'@return sigmasample posterior samples of the error standard deviation.
+#'@examples
+#'##simulate data (example from Friedman MARS paper)
+#'f = function(x){
+#'  10*sin(pi*x[,1]*x[,2]) + 20*(x[,3]-.5)^2+10*x[,4]+5*x[,5]
+#'}
+#'sigma = 1.0 #y = f(x) + sigma*z , z~N(0,1)
+#'n = 100 #number of observations
+#'set.seed(99)
+#'x=matrix(runif(n*10),n,10) #10 variables, only first 5 matter
+#'Ey = f(x)
+#'y=Ey+sigma*rnorm(n)
+#'dat = data.frame(x,y)
+#'fml = as.formula("y ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10")
+#'bfit = BART_call(fml, data = dat, test.data = NULL,
+#'                 Prior = list(nu = 3, sigq = 0.9,
+#'                              ntrees = 100,
+#'                              kfac = 2,
+#'                              pswap = 0.1, pbd = 0.5, pb = 0.25,
+#'                              alpha = 0.95, beta = 2.0,
+#'                              nc = 100, minobsnode = 10),
+#'                 Mcmc = list(burn=100, ndraws = 1000))
+#'
 #'@import bayesm mlbench mlogit cvTools stats
 #'@export
 #'@useDynLib allBART
@@ -70,13 +91,17 @@ BART_call  <- function(formula, data, test.data = NULL,
     X <- X[,xcolnames]
   }
 
-
-  if(length(xcolnames) == 1 ){
-    Xtest <- data.frame(test.data[,xcolnames])
-    names(Xtest) <- xcolnames[1]
+  if (!is.null(test.data)){
+    if(length(xcolnames) == 1 ){
+      Xtest <- data.frame(test.data[,xcolnames])
+      names(Xtest) <- xcolnames[1]
+    } else {
+      Xtest <- test.data[,xcolnames]
+    }
   } else {
-    Xtest <- test.data[,xcolnames]
+    Xtest = 0
   }
+
 
 
   Data = list(y = Y,X = X)
@@ -97,7 +122,7 @@ BART_call  <- function(formula, data, test.data = NULL,
 
 
   if(missing(Prior))
-  {nu=3;sigq=0.90;ntrees=200; kfac=2.0;pswap=0;pbd=1.0;pb=0.5;beta = 2.0;alpha = 0.95; nc = 100; priorindep = 0; minobsnode = 10;
+  {nu=3;sigq=0.90;ntrees=200; kfac=2.0;pswap=0;pbd=1.0;pb=0.5;beta = 2.0;alpha = 0.95; nc = 100; minobsnode = 10;
   }
   else
   { if(is.null(Prior$nu)) {nu = 3} else {nu=Prior$nu}
@@ -110,7 +135,6 @@ BART_call  <- function(formula, data, test.data = NULL,
     if(is.null(Prior$beta)) {beta = 2.0} else {beta=Prior$beta}
     if(is.null(Prior$alpha)) {alpha = 0.95} else {alpha=Prior$alpha}
     if(is.null(Prior$nc)) {nc=100} else {nc=Prior$nc}
-    if(is.null(Prior$priorindep)) {priorindep= FALSE} else {priorindep=Prior$priorindep}
     if(is.null(Prior$minobsnode)) {minobsnode= 10} else {minobsnode=Prior$minobsnode}
   }
 
@@ -171,20 +195,24 @@ BART_call  <- function(formula, data, test.data = NULL,
   yhat.train = (rgy[2]-rgy[1])*(res$vec_train+.5) + rgy[1] #nsamp X npost
   stmp = rep(sigmasample,each = n)
   vec_samp_train = rnorm(n*ndraws, yhat.train, stmp)
-  vec_samp_train = matrix(vec_samp_train, byrow = TRUE, ncol = n) #npost X nsamp
+  vec_samp_train = matrix(vec_samp_train, nrow = n) #nsamp X npost
+
+  yhat.train = matrix(yhat.train, nrow = n)
 
   if (!is.null(test.data)){
     yhat.test = (rgy[2]-rgy[1])*(res$vec_test+.5) + rgy[1]
     stmp = rep(sigmasample,each = testn)
     vec_samp_test = rnorm(testn*ndraws, yhat.test, stmp)
-    vec_samp_test = matrix(vec_samp_test, byrow = TRUE, ncol = testn)
+    vec_samp_test = matrix(vec_samp_test, nrow = testn)
 
+    yhat.test = matrix(yhat.test, nrow = testn)
   } else {
     vec_samp_test <- NULL
+    yhat.test <- NULL
   }
 
-  ret = list(treefit_test = matrix(yhat.test, byrow = TRUE, ncol = n),
-             treefit_train = matrix(yhat.train, byrow = TRUE, ncol = testn),
+  ret = list(treefit_test = yhat.test,
+             treefit_train = yhat.train,
              samp_test = vec_samp_test,
              samp_train = vec_samp_train,
              sigmasample = sigmasample);

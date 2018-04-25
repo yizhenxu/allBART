@@ -15,36 +15,40 @@
 
 extern "C" {
 
-  void mypbart(double  *pX, double *testpX, double *mu,
-               int *pn, double *y,
-               int *pn_cov,
-               int *testn,
-               int *pndraws,
-               int *pburn,
-               int *pntrees,
-               double *pkfac,
-               double *ppswap,
-               double *ppbd,
-               double *ppb,
-               double *palpha,
-               double *pbeta,
-               int *pnc,
-               int *pminobsnode,
-               double *vec_test,
-               double *vec_train,
-               int *binaryX){
+  void mydynbart(double  *pX, double *testpX, double *mu, double *psigest,
+              int *pn, double *y,
+              int *pn_cov, int *pnu, double *plambda,
+              int *testn, int *testnsub,
+              int *pndraws,
+              int *pburn,
+              int *pntrees,
+              double *pkfac,
+              double *ppswap,
+              double *ppbd,
+              double *ppb,
+              double *palpha,
+              double *pbeta,
+              int *pnc,
+              int *pminobsnode,
+              double *psigmasample,
+              double *vec_test,
+              double *vec_train,
+              int *binaryX){
     //    *pX is n_samp x n_cov  matrix
-    //    *y is binary
+    //    *y is continuous
 
     dinfo di; dinfo dip;
     di.n_samp = *pn; di.n_cov = *pn_cov; di.n_dim = 0;
     if(*testn){
-      dip.n_samp = *testn; dip.n_cov = *pn_cov; dip.n_dim = 0; dip.y=0;
+      dip.n_samp = *testnsub; dip.n_cov = *pn_cov; dip.n_dim = 0; dip.y=0;
     }
 
+    int nn = *pn; /* nsub */
+    int nu = *pnu; /* df in sigma prior */
+    double lambda = *plambda; /* param in sigma prior */
     size_t minobsnode = *pminobsnode;
 
-    std::vector<std::vector<double> >  XMat; /* The train.data of dimensions nsub x ncov*/
+    std::vector<std::vector<double> > XMat; /* The train.data of dimensions nsub x ncov*/
     XMat.resize(di.n_samp);
     for(size_t j=0; j < di.n_samp; j++){
       XMat[j].resize(di.n_cov);
@@ -56,18 +60,24 @@ extern "C" {
       }
     }
 
+    size_t nd = *pndraws; //number of mcmc iterations
 
-
-    std::vector<std::vector<double> >   testXMat; /* The test.data of dimensions nsub_test x ncov*/
-    testXMat.resize(dip.n_samp);
-    for(size_t j=0; j < dip.n_samp; j++){
-      testXMat[j].resize(dip.n_cov);
+    std::vector<std::vector<std::vector<double> > > testXMat; /* The test.data of dimensions nsub_test x ncov*/
+    testXMat.resize(nd);
+    for(size_t j=0; j < nd; j++){
+      testXMat[j].resize(dip.n_samp);
     }
-    if(*testn){
-      itemp = 0;
+
+    for(size_t j=0; j < nd; j++){
+      for(size_t i=0; i < dip.n_samp; i++){
+        testXMat[j][i].resize(dip.n_cov);
+      }
+    }
+    itemp = 0;
+    for(size_t j=0; j < nd; j++){
       for(size_t i=0; i < dip.n_samp; i++){
         for(size_t k=0; k< dip.n_cov; k++){
-          testXMat[i][k] = testpX[itemp++];
+          testXMat[j][i][k] = testpX[itemp++];
         }
       }
     }
@@ -79,9 +89,6 @@ extern "C" {
 
     std::vector<double> allfit; /* The sum of fit of all trees for train.data (nsub x 1)*/
     allfit.resize(di.n_samp);
-
-    std::vector<double> w; /* The latent variable for train.data (nsub x 1)*/
-    w.resize(di.n_samp);
 
     std::vector<double> ppredmeanvec; /* The sum of fit of all trees for test.data (nsub_test x 1)*/
     if(*testn){
@@ -105,7 +112,7 @@ extern "C" {
 
     // priors and parameters
     size_t burn = *pburn; //number of mcmc iterations called burn-in
-    size_t nd = *pndraws; //number of mcmc iterations
+    //size_t nd = *pndraws; //number of mcmc iterations
     size_t m=*pntrees;
     double kfac=*pkfac;
 
@@ -116,8 +123,8 @@ extern "C" {
 
     pi.alpha=*palpha; //prior prob a bot node splits is alpha/(1+d)^beta, d is depth of node
     pi.beta=*pbeta; //
-    pi.tau=3.0/(kfac*sqrt((double)m)); // categorical outcome
-    pi.sigma= 1; //error standard deviation of the latent W
+    pi.tau=(0.5)/(kfac*sqrt((double)m)); //this is different from categorical outcome
+    pi.sigma= *psigest;
 
     //initialize tree
 
@@ -129,38 +136,39 @@ extern "C" {
 
     for(size_t i=0;i<di.n_samp;i++) {
       allfit[i] = 0.0;
-      w[i] = 2*(y[i]) - 1.0; //y is 0 and 1, w is -1 and 1
     }
 
-    double u,Z; //for updating latent w
+    double ss = 0.0;
 
     //MCMC
 
-
-    //cout << "\nMCMC:\n";
     time_t tp;
     int time1 = time(&tp);
 
-    /* Initialize counters for outputs vec_test and vec_train */
+    /* Initialize counters for outputs psigmasample, vec_test and vec_train */
+    int sigdrawcounter = 0;
     int countvectest = 0;
     int countvectrain = 0;
 
 
     for(size_t loop=0;loop<(nd+burn);loop++) { /* Start posterior draws */
-      GetRNGstate();
+
+    GetRNGstate();
+
       if(loop%100==0) Rprintf("\n iteration: %d of %d \n",loop, nd+burn);
 
-      /* Step 1 sample trees*/
+      /* Step 1 */
       /* See tree sampling theory.doc for explanation */
       for(size_t ntree = 0 ; ntree <m; ntree++){
         fit(t[ntree], XMat, di, xi, ftemp);
         for(size_t i=0;i<di.n_samp;i++) {
           allfit[i] -= ftemp[i];
-          rtemp[i] = w[i] - allfit[i];
+          rtemp[i] = y[i] - allfit[i];
         }
 
         di.y = &rtemp[0];
         bd(XMat, t[ntree], xi, di, pi, minobsnode, binaryX);
+
         fit(t[ntree], XMat, di, xi, ftemp);
         for(size_t i=0;i<di.n_samp;i++) {
           allfit[i] += ftemp[i];
@@ -168,20 +176,28 @@ extern "C" {
 
       }//ntree
 
+
       //done sampling (T,M)
 
-      /* Step 2 update latent variable w*/
+      /* Step 2 */
       for(size_t i=0;i<di.n_samp;i++) {
-        u = unif_rand();
-        if(y[i] > 0) {
-          Z = qnorm((1.0-u)*pnorm(-allfit[i],0.0,1.0,1,0) + u,0.0,1.0,1,0);
-        } else {
-          Z = -qnorm((1.0-u)*pnorm(allfit[i],0.0,1.0,1,0) + u,0.0,1.0,1,0);
-        }
-        w[i] = allfit[i] + Z;
+        rtemp[i] = y[i] - allfit[i];
       }
 
+      ss = 0.0;
+      for(size_t i=0;i<di.n_samp;i++) {
+        ss += rtemp[i]* rtemp[i];
+      }
+
+      int nupost = nu+nn;
+      double nlpost = nu*lambda + ss;
+      pi.sigma = sqrt(nlpost/rchisq((double)nupost));
+
+      //std::cout << "loop = "<<loop<<"; SSE = "<<ss<<"; sigma = " << pi.sigma<<";\n";
+
       if(loop>=burn){
+        psigmasample[sigdrawcounter++] = pi.sigma;
+
         for(size_t k = 0; k <di.n_samp; k++){
           vec_train[countvectrain] = allfit[k];
           countvectrain++;
@@ -194,7 +210,7 @@ extern "C" {
           }
 
           for(size_t j=0;j<m;j++) {
-            fit(t[j], testXMat, dip, xi, fpredtemp);
+            fit(t[j], testXMat[loop-burn], dip, xi, fpredtemp);
             for(size_t k=0;k<dip.n_samp;k++) ppredmeanvec[k] += fpredtemp[k];
           }
 
@@ -214,9 +230,9 @@ extern "C" {
     int time2 = time(&tp);
     Rprintf("time for mcmc loop %d secs", time2-time1);
 
-
     for(size_t i=0; i<m; i++){
       t[i].tonull();
     }//delete trees
+
   }
 };

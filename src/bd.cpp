@@ -92,8 +92,7 @@ bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pin
     if(nxp==0) { //no parent, nx is the top and only node
       Pnogy=1.0;
     } else {
-      //if(nxp->ntype() == 'n') { //if parent is a nog, number of nogs same at x and y
-      if(nxp->isnog()) { //if parent is a nog, number of nogs same at x and y
+       if(nxp->isnog()) { //if parent is a nog, number of nogs same at x and y
         Pnogy = 1.0/nnogs;
       } else { //if parent is not a nog, y has one more nog.
         Pnogy = 1.0/(nnogs+1.0);
@@ -171,7 +170,6 @@ bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pin
     double PGrx = pgrow(nx->getr(),xi,pi);
 
     double PBy;  //prob of birth move at y
-    //if(nx->ntype()=='t') { //is the nog node nx the top node
     if(!(nx->p)) { //is the nog node nx the top node
       PBy = 1.0;
     } else {
@@ -219,6 +217,7 @@ bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pin
       mu = b*yb/(a+b) + norm_rand()/sqrt(a+b);
       //do death
       x.death(nx->nid(),mu);
+
       return true;
     } else {
       return false;
@@ -246,10 +245,11 @@ bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pin
     tree xstar;//to-swap copy of x
     tree::tree_p xp =  x.getptr(1); //pointer to x
     xstar.pcp(xp); //get a copy of x (by its pointer xp) to xstar
-    tree::tree_p nxstar = xstar.getptr(nx->nid());;//pointer to the swap parent node of xstar
+    tree::tree_p nxstar = xstar.getptr(nx->nid());//pointer to the swap parent node of xstar
     checkrule = validswap(xstar, nxstar, xi, lind, rind, binaryX);
     if(!checkrule){ //not a valid swap
       xstar.tonull();
+      nxstar = 0;
       return false;
     }
 
@@ -257,28 +257,42 @@ bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pin
     //compute things needed for metropolis ratio
 
     double XLogPi, XLogL, YLogPi, YLogL;
-    YLogL = lilT1(X, xstar, nxstar, xi, pi, di, 1); // update bottom mu’s of the swapped tree copy
+    tree::npv nxbnv, nxstarbnv;
+    YLogL = lilT1(X, xstar, nxstar, xi, pi, di, nxstarbnv, 1); // update bottom mu’s of the swapped tree copy
     //is there empty bottom node(s)?
     if(YLogL == 10086.0){ //empty bn from swap, invalid
       xstar.tonull();
+      nxstar = 0;
       return false;
     }
     YLogPi = lpiT(nxstar, xi, pi, binaryX);
 
     XLogPi = lpiT(nx, xi, pi, binaryX);
-    XLogL = lilT1(X, x, nx, xi, pi, di, 0); //do not update bottom mu’s
+    XLogL = lilT1(X, x, nx, xi, pi, di, nxbnv, 0); //do not update bottom mu’s
 
     double alpha;
     alpha = std::min(1.0,exp(YLogPi+YLogL-XLogPi-XLogL));
 
     if(unif_rand() < alpha) {
-      //replace xp (x) with xstar
-      nx->tonull();
-      nx->pcp(nxstar);
+      //update xp (x) with xstar
+      nx->v = nxstar->v; nx->c = nxstar->c;
+      if(lind == 1){
+        (nx->l)->v = (nxstar->l)->v;(nx->l)->c = (nxstar->l)->c;
+      }
+      if(rind == 1){
+        (nx->r)->v = (nxstar->r)->v;(nx->r)->c = (nxstar->r)->c;
+      }
+
+      for(size_t k = 0; k != nxbnv.size(); k++){
+        nxbnv[k]->mu = nxstarbnv[k]->mu;
+      }
+
       xstar.tonull();
+      nxstar = 0;
       return true;
     } else {
       xstar.tonull();
+      nxstar = 0;
       return false;
     }
 
@@ -335,32 +349,38 @@ bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pin
     //compute things needed for metropolis ratio
 
     double XLogPi, XLogL, YLogPi, YLogL;
-    YLogL = lilT1(X, xstar, nxstar, xi, pi, di, 1); // update bottom mu’s of the changed tree copy
+    tree::npv nxbnv, nxstarbnv;
+    YLogL = lilT1(X, xstar, nxstar, xi, pi, di, nxstarbnv, 1); // update bottom mu’s of the changed tree copy
     //is there empty bottom node(s)?
     if(YLogL == 10086.0){ //empty bn from rule change, invalid
       xstar.tonull();
+      nxstar = 0;
       return false;
     }
     YLogPi = lpiT(nxstar, xi, pi, binaryX);
 
     XLogPi = lpiT(nx, xi, pi, binaryX);
-    XLogL = lilT1(X, x, nx, xi, pi, di, 0); //do not update bottom mu’s
+    XLogL = lilT1(X, x, nx, xi, pi, di, nxbnv, 0); //do not update bottom mu’s
 
     double alpha;
     alpha = std::min(1.0,exp(YLogPi+YLogL-XLogPi-XLogL));
 
     if(unif_rand() < alpha) {
       //replace xp (x) with xstar
-      nx->tonull();
-      nx->pcp(nxstar);
+      nx->v = nxstar->v; nx->c = nxstar->c;
+
+      for(size_t k = 0; k != nxbnv.size(); k++){
+        nxbnv[k]->mu = nxstarbnv[k]->mu;
+      }
+
       xstar.tonull();
+      nxstar = 0;
       return true;
     } else {
       xstar.tonull();
+      nxstar = 0;
       return false;
     }
-
-
 
   } //End if-else
   PutRNGstate();

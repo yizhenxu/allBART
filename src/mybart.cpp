@@ -43,13 +43,16 @@ extern "C" {
       dip.n_samp = *testn; dip.n_cov = *pn_cov; dip.n_dim = 0; dip.y=0;
     }
 
-
     int nn = *pn; /* nsub */
     int nu = *pnu; /* df in sigma prior */
     double lambda = *plambda; /* param in sigma prior */
     size_t minobsnode = *pminobsnode;
 
-    std::vector<std::vector<double> >  XMat; /* The train.data of dimensions nsub x ncov*/
+    std::vector<std::vector<double> > XMat; /* The train.data of dimensions nsub x ncov*/
+    XMat.resize(di.n_samp);
+    for(size_t j=0; j < di.n_samp; j++){
+      XMat[j].resize(di.n_cov);
+    }
     int itemp = 0;
     for(size_t i=0; i < di.n_samp; i++){
       for(size_t k=0; k< di.n_cov; k++){
@@ -57,9 +60,11 @@ extern "C" {
       }
     }
 
-
-
-    std::vector<std::vector<double> >   testXMat; /* The test.data of dimensions nsub_test x ncov*/
+    std::vector<std::vector<double> > testXMat; /* The test.data of dimensions nsub_test x ncov*/
+    testXMat.resize(dip.n_samp);
+    for(size_t j=0; j < dip.n_samp; j++){
+      testXMat[j].resize(dip.n_cov);
+    }
     if(*testn){
       itemp = 0;
       for(size_t i=0; i < dip.n_samp; i++){
@@ -68,7 +73,6 @@ extern "C" {
         }
       }
     }
-
 
     xinfo xi; /* The cutpoint matrix (ncov x nc) */
     int nc=*pnc; // number of equally spaced cutpoints between min and max.
@@ -129,8 +133,6 @@ extern "C" {
 
     //MCMC
 
-
-    //cout << "\nMCMC:\n";
     time_t tp;
     int time1 = time(&tp);
 
@@ -142,70 +144,77 @@ extern "C" {
 
     for(size_t loop=0;loop<(nd+burn);loop++) { /* Start posterior draws */
 
+      GetRNGstate();
 
-    if(loop%100==0) Rprintf("iteration: %d of %d \n",loop, nd+burn);
+      if(loop%100==0) Rprintf("\n iteration: %d of %d \n",loop, nd+burn);
 
-    /* Step 1 */
-    /* See tree sampling theory.doc for explanation */
-    for(size_t ntree = 0 ; ntree <m; ntree++){
-      fit(t[ntree], XMat, di, xi, ftemp);
+      /* Step 1 */
+      /* See tree sampling theory.doc for explanation */
+      for(size_t ntree = 0 ; ntree <m; ntree++){
+        fit(t[ntree], XMat, di, xi, ftemp);
+        for(size_t i=0;i<di.n_samp;i++) {
+          allfit[i] -= ftemp[i];
+          rtemp[i] = y[i] - allfit[i];
+        }
+
+        di.y = &rtemp[0];
+        bd(XMat, t[ntree], xi, di, pi, minobsnode, binaryX);
+
+        fit(t[ntree], XMat, di, xi, ftemp);
+        for(size_t i=0;i<di.n_samp;i++) {
+          allfit[i] += ftemp[i];
+        }
+
+      }//ntree
+
+
+      //done sampling (T,M)
+
+      /* Step 2 */
       for(size_t i=0;i<di.n_samp;i++) {
-        allfit[i] -= ftemp[i];
         rtemp[i] = y[i] - allfit[i];
       }
 
-      di.y = &rtemp[0];
-      bd(XMat, t[ntree], xi, di, pi, minobsnode, binaryX);
-      fit(t[ntree], XMat, di, xi, ftemp);
+      ss = 0.0;
       for(size_t i=0;i<di.n_samp;i++) {
-        allfit[i] += ftemp[i];
+        ss += rtemp[i]* rtemp[i];
       }
 
-    }//ntree
+      int nupost = nu+nn;
+      double nlpost = nu*lambda + ss;
+      pi.sigma = sqrt(nlpost/rchisq((double)nupost));
 
+      //std::cout << "loop = "<<loop<<"; SSE = "<<ss<<"; sigma = " << pi.sigma<<";\n";
 
-    //done sampling (T,M)
+      if(loop>=burn){
+        psigmasample[sigdrawcounter++] = pi.sigma;
 
-    /* Step 2 */
-    for(size_t i=0;i<di.n_samp;i++) {
-      rtemp[i] = y[i] - allfit[i];
-    }
+        for(size_t k = 0; k <di.n_samp; k++){
+          vec_train[countvectrain] = allfit[k];
+          countvectrain++;
+        }//end prediction for train
 
-    ss = 0.0;
-    for(size_t i=0;i<di.n_samp;i++) {
-      ss += rtemp[i]* rtemp[i];
-    }
+        if(*testn) {
 
-    int nupost = nu+nn;
-    double nlpost = nu*lambda + ss;
-    pi.sigma = sqrt(nlpost/rchisq((double)nupost));
+          for(size_t k=0; k<dip.n_samp; k++){
+            ppredmeanvec[k] = 0.0;
+          }
 
-    if(loop>=burn){
-      psigmasample[sigdrawcounter++] = pi.sigma;
-      for(size_t k = 0; k <di.n_samp; k++){
-        vec_train[countvectrain] = allfit[k];
-        countvectrain++;
-      }//end prediction for train
+          for(size_t j=0;j<m;j++) {
+            fit(t[j], testXMat, dip, xi, fpredtemp);
+            for(size_t k=0;k<dip.n_samp;k++) ppredmeanvec[k] += fpredtemp[k];
+          }
 
-      if(*testn) {
+          for(size_t k = 0; k <dip.n_samp; k++){
+            vec_test[countvectest] = ppredmeanvec[k];
+            countvectest++;
+          }//end prediction for test
 
-        for(size_t k=0; k<dip.n_samp; k++){
-          ppredmeanvec[k] = 0.0;
-        }
+        }//end if test
 
-        for(size_t j=0;j<m;j++) {
-          fit(t[j], testXMat, dip, xi, fpredtemp);
-          for(size_t k=0;k<dip.n_samp;k++) ppredmeanvec[k] += fpredtemp[k];
-        }
+      }//end prediction for current loop
 
-        for(size_t k = 0; k <dip.n_samp; k++){
-          vec_test[countvectest] = ppredmeanvec[k];
-          countvectest++;
-        }//end prediction for test
-
-      }//end if test
-
-    }//end prediction for current loop
+      PutRNGstate();
 
     } //end of loop
 

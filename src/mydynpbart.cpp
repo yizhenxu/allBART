@@ -15,10 +15,10 @@
 
 extern "C" {
 
-  void mypbart(double  *pX, double *testpX, double *mu,
+  void mydynpbart(double  *pX, double *testpX, double *mu,
                int *pn, double *y,
                int *pn_cov,
-               int *testn,
+               int *testn, int *testnsub,
                int *pndraws,
                int *pburn,
                int *pntrees,
@@ -39,7 +39,7 @@ extern "C" {
     dinfo di; dinfo dip;
     di.n_samp = *pn; di.n_cov = *pn_cov; di.n_dim = 0;
     if(*testn){
-      dip.n_samp = *testn; dip.n_cov = *pn_cov; dip.n_dim = 0; dip.y=0;
+      dip.n_samp = *testnsub; dip.n_cov = *pn_cov; dip.n_dim = 0; dip.y=0;
     }
 
     size_t minobsnode = *pminobsnode;
@@ -56,22 +56,27 @@ extern "C" {
       }
     }
 
+    size_t nd = *pndraws; //number of mcmc iterations
 
-
-    std::vector<std::vector<double> >   testXMat; /* The test.data of dimensions nsub_test x ncov*/
-    testXMat.resize(dip.n_samp);
-    for(size_t j=0; j < dip.n_samp; j++){
-      testXMat[j].resize(dip.n_cov);
+    std::vector<std::vector<std::vector<double> > > testXMat; /* The test.data of dimensions nsub_test x ncov*/
+    testXMat.resize(nd);
+    for(size_t j=0; j < nd; j++){
+      testXMat[j].resize(dip.n_samp);
     }
-    if(*testn){
-      itemp = 0;
+
+    for(size_t j=0; j < nd; j++){
+      for(size_t i=0; i < dip.n_samp; i++){
+        testXMat[j][i].resize(dip.n_cov);
+      }
+    }
+    itemp = 0;
+    for(size_t j=0; j < nd; j++){
       for(size_t i=0; i < dip.n_samp; i++){
         for(size_t k=0; k< dip.n_cov; k++){
-          testXMat[i][k] = testpX[itemp++];
+          testXMat[j][i][k] = testpX[itemp++];
         }
       }
     }
-
 
     xinfo xi; /* The cutpoint matrix (ncov x nc) */
     int nc=*pnc; // number of equally spaced cutpoints between min and max.
@@ -105,7 +110,7 @@ extern "C" {
 
     // priors and parameters
     size_t burn = *pburn; //number of mcmc iterations called burn-in
-    size_t nd = *pndraws; //number of mcmc iterations
+    //size_t nd = *pndraws; //number of mcmc iterations
     size_t m=*pntrees;
     double kfac=*pkfac;
 
@@ -147,7 +152,7 @@ extern "C" {
 
 
     for(size_t loop=0;loop<(nd+burn);loop++) { /* Start posterior draws */
-      GetRNGstate();
+    GetRNGstate();
       if(loop%100==0) Rprintf("\n iteration: %d of %d \n",loop, nd+burn);
 
       /* Step 1 sample trees*/
@@ -194,7 +199,7 @@ extern "C" {
           }
 
           for(size_t j=0;j<m;j++) {
-            fit(t[j], testXMat, dip, xi, fpredtemp);
+            fit(t[j], testXMat[loop-burn], dip, xi, fpredtemp);
             for(size_t k=0;k<dip.n_samp;k++) ppredmeanvec[k] += fpredtemp[k];
           }
 

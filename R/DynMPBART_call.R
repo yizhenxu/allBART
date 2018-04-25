@@ -1,12 +1,10 @@
 #'Multinomial Probit Bayesian Additive Regression Trees
 #'
-#'Multinomial probit modeling using Bayesian Additive Regression Trees,
-#'@param formula response ~ demographic covariates. Demographic covariates are the covariates that are not specific to levels of the multinomial response,
-#'@param data Training Data in wide format (for details on wide format, see documentation in R package \pkg{mlogit}). Names of alternative specific covariates (the covariates that are specific to levels of the multinomial response) should in the format of “Xa.y”, where Xa is a variable name, and y is a level of the multinomial response, and “.” is the separator. For examle, if “price” is an alternative specific covariate, and the response takes values 2, 3, and 4, then the train.data should contain “price.2”, “price.3”, and “price.4”,
-#'@param test.data Test Data in wide format, typically without the response,
+#'Multinomial probit modeling using Bayesian Additive Regression Trees for Dynamic Data,
+#'@param formula response ~ covariates,
+#'@param data Training data with the multinomial response,
+#'@param test.data Test Data with number of rows equals nsamp x ndraws, typically without the response. For the ith subject, (i, i+nsamp, ..., i+(ndraws-1)nsamp) rows are its simulated posterior outcomes from the previous simulation,
 #'@param base order index of the reference level of the multinomial response. For example, if the response takes values 2, 3, and 4, then base = 2 sets response value 3 as the reference. Default is the highest class,
-#'@param varying The indeces of the variables in the train.data that are alternative specific. The length of varying should be a multiple of the number of levels in the multinomial response,
-#'@param sep The seperator of the variable name and the alternative level in the alternative specific covariates. The default separator is dot (.).
 #'@param Prior List of Priors for MPBART: e.g., Prior = list(nu=p+2,  V= diag(p - 1), ntrees=200,  kfac=2.0, pswap=0,  pbd=1.0, pb=0.5 , beta = 2.0, alpha = 0.95, nc = 100, minobsnode = 10).
 #'The components of Prior are
 #' \itemize{
@@ -39,30 +37,43 @@
 #'sigma = 1.0 #y = f(x) + sigma*z , z~N(0,1)
 #'n = 100 #number of observations
 #'set.seed(99)
+#'###############################################
+#'nd = 1000 # ndraws
+#'x1 = matrix(runif(n*9),n,9) #10 variables, only first 5 matter
+#'x1 = x1[rep(1:n,nd),]
+#'x2 = runif(n*nd)
+#'x = cbind(x1, x2)
+#'Ey = f(x)
+#'u=Ey+sigma*rnorm(n*nd)
+#'z = (u-min(u))/(max(u)-min(u))
+#'y = 1*(z<0.4)+ 2*(z>=0.4 & z<0.6) + 3*(z>=0.6)
+#'tdat = data.frame(x,y)
+#'###############################################
 #'x=matrix(runif(n*10),n,10) #10 variables, only first 5 matter
 #'Ey = f(x)
 #'u=Ey+sigma*rnorm(n)
 #'z = (u-min(u))/(max(u)-min(u))
 #'y = 1*(z<0.4)+ 2*(z>=0.4 & z<0.6) + 3*(z>=0.6)
-#'p = 3 # number of outcome categories
 #'dat = data.frame(x,y)
+#'colnames(tdat) = colnames(dat)
+#'###############################################
+#'p = 3
 #'fml = as.formula("y ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10")
-#'bmpfit = MPBART_call(fml, data = dat, test.data = NULL,
+#'bmpfit = DynMPBART_call(fml, data = dat, test.data = tdat,
 #'                     Prior = list(nu = p-1+3, V = diag(p-1),
 #'                                  ntrees = 100,
 #'                                  kfac = 2,
 #'                                  pswap = 0.1, pbd = 0.5, pb = 0.25,
 #'                                  alpha = 0.95, beta = 2.0,
 #'                                  nc = 100, minobsnode = 10),
-#'                     Mcmc = list(sigma0 = diag(p-1), burn = 100, ndraws = 1000,
+#'                     Mcmc = list(sigma0 = diag(p-1), burn = 100, ndraws = nd,
 #'                                 nSigDr = 20, keep_sigma_draws=T))
 #'
 #'@import bayesm mlbench mlogit cvTools stats
 #'@export
 #'@useDynLib allBART
-MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
-                         Prior = NULL, Mcmc = NULL,
-                         varying = NULL, sep = '.')
+DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
+                         Prior = NULL, Mcmc = NULL)
 {
 
   callT <- match.call(expand.dots = TRUE)
@@ -120,8 +131,6 @@ MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
 
   X <- model.matrix.default(Terms, mf)
 
-
-
   xcolnames <- colnames(X)[-1]
 
   if(length(xcolnames) == 1 ){
@@ -132,7 +141,17 @@ MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
 
     X <- X[,xcolnames]
   }
+
   if (!is.null(test.data)){
+
+    if(is.null(Mcmc$ndraws))
+      stop(paste("Error: ndraws is required for dynamic model calls."))
+
+    ndraws=Mcmc$ndraws
+    testnsub = nrow(test.data) / ndraws
+
+    if(testnsub %% 1 != 0)
+      stop(paste("Error: testn does not equal to test.nsub x ndraws."))
 
     if(length(xcolnames) == 1 ){
       Xtest <- data.frame(test.data[,xcolnames])
@@ -141,81 +160,27 @@ MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
       Xtest <- test.data[,xcolnames]
     }
 
-    testXEx = NULL;
-    for(i in 1:nrow(Xtest)){
-      testXEx = rbind(testXEx, matrix(rep(Xtest[i,], p-1), byrow = TRUE, ncol = ncol(Xtest) ) )
-    }
-
-
   } else {
-    testXEx = 0
+    stop(paste("Error: no test data, please use MPBART_call instead."))
   }
 
-
-  XEx = NULL;
-  for(i in 1:nrow(X)){
-    XEx = rbind(XEx, matrix(rep(X[i,], p-1), byrow = TRUE, ncol = ncol(X) ) )
-  }
-
-
-  Data = list(p=p,y=Y,X= XEx)
-  testData = list(p=p,X= testXEx)
-
+  Data = list(p=p,y=Y,X= X)
+  testData = list(p=p,X= Xtest)
 
   cat("Table of y values",fill=TRUE)
   print(table(model.response(mf) ))
 
-
+  print(head(Data$X))
+  print(head(Data$y))
   n=length(Data$y)
 
   pm1=p-1
 
   if (!is.null(test.data)){
-    testn <- nrow(testData$X)/(p-1)
+    testn <- nrow(testData$X)
   } else {
     testn <- 0
   }
-
-
-  #reading alternate specific variables
-  if (!is.null(varying)) {
-
-    varying.names <-    names(data)[varying]
-
-    alt.names <- NULL
-    for(vv in 1:(length(varying))){
-      alt.names <- c(alt.names, unlist(strsplit(varying.names[vv], sep, fixed = TRUE))[1L])
-    }
-
-
-
-    alt.names <- unique(alt.names)
-
-
-    if(length(alt.names) != length(varying)/p){
-      stop("alternative variables names mismatch. Check names of alternative variables.")
-    }
-
-    reordered_names <- NULL
-    for(nn in 1:(length(varying)/p)){
-      reordered_names <- c(reordered_names,  paste0(alt.names[nn], sep, relvelved) )
-    }
-
-    XChSp <- createX(p,na=length(varying)/p ,
-                     nd=NULL,Xa= data[,reordered_names],Xd=NULL,
-                     INT = FALSE,DIFF=TRUE,base=p)
-
-    Data$X <- cbind(Data$X, XChSp)
-
-    if (!is.null(test.data)){
-      testXChSp = createX(p,na=length(varying)/p ,
-                          nd=NULL,Xa= test.data[,reordered_names],Xd=NULL,
-                          INT = FALSE,DIFF=TRUE,base=p)
-      testData$X <- cbind(testData$X, testXChSp)
-    }
-
-  }
-
 
   binaryX = rep(NA,ncol(Data$X))
   for(i in 1:ncol(Data$X)){
@@ -246,7 +211,7 @@ MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
   if(is.null(Mcmc$sigma0)) {sigma0=diag(pm1)} else {sigma0=Mcmc$sigma0}
 
   if(is.null(Mcmc$burn)) {burn=100} else {burn=Mcmc$burn}
-  if(is.null(Mcmc$ndraws)) {ndraws=1000} else {ndraws=Mcmc$ndraws}
+  #if(is.null(Mcmc$ndraws)) {ndraws=1000} else {ndraws=Mcmc$ndraws}
   if(is.null(Mcmc$nSigDr)) {nSigDr=50} else {nSigDr=Mcmc$nSigDr}
   if(is.null(Mcmc$keep_sigma_draws)) {keep_sigma_draws=FALSE} else {keep_sigma_draws=Mcmc$keep_sigma_draws}
 
@@ -263,9 +228,9 @@ MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
   cat("Number of draws: ", ndraws, ".\n\n", sep="")
   cat("burn-in: ", burn, "'\n\n", sep="")
 
+  cat("testnsub: ", testnsub, "'\n\n", sep="")
 
-
-  res =   .C('mympbart',w=as.double(rep(0,nrow(Data$X))),
+  res =   .C('mydynmpbart',w=as.double(rep(0,nrow(Data$X))),
              trainx= as.double(t(Data$X)),
              testx= as.double(t(testData$X)),
              mu = as.double(rep(0,nrow(Data$X))),
@@ -277,6 +242,7 @@ MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
              n_cov = as.integer(ncol(Data$X)),
              nu = as.integer(nu),
              testn = as.integer(testn),
+             testnsub = as.integer(testnsub),
              ndraws = as.integer(ndraws),
              burn = as.integer(burn),
              ntrees = as.integer(ntrees),
@@ -294,12 +260,13 @@ MPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
              vec_test = as.integer(rep(0,testn*ndraws)),
              vec_train = as.integer(rep(0,n*ndraws)),
              binaryX = as.integer(binaryX))
-
+#  change : vec_test = as.integer(rep(0,testnsub*ndraws)),
   relvelved = as.numeric(relvelved)
   vec_class_train <- matrix(relvelved[res$vec_train], nrow = n)
 
   if (!is.null(test.data)){
 
+    #vec_class_test <- matrix(relvelved[res$vec_test], nrow = testnsub)
     vec_class_test <- matrix(relvelved[res$vec_test], nrow = testn)
 
   } else {

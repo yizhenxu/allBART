@@ -92,7 +92,7 @@ void rMVN(
     std::vector<std::vector<double> >& Var,
     size_t size);
 
-void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind);
+void swapkidInd(tree::tree_cp n1, tree::tree_cp n2, int* lind, int* rind);
 
 bool validswap(tree& xstar,  tree::tree_p nstar, xinfo& xi, int lind, int rind, int *binaryX);
 
@@ -104,4 +104,4 @@ double lilT(std::vector<std::vector<double> >& X, tree::tree_p x,
             tree::tree_p n, xinfo& xi, pinfo& pi, dinfo& di, int upd);
 
 double lilT1(std::vector<std::vector<double> >& X, tree& x,
-             tree::tree_p n, xinfo& xi, pinfo& pi, dinfo& di, int upd);
+             tree::tree_p n, xinfo& xi, pinfo& pi, dinfo& di, tree::npv& nbnv, int upd);

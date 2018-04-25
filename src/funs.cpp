@@ -467,7 +467,8 @@ void dinv(std::vector<std::vector<double> >& X,
 
 }
 
-/* Cholesky decomposition, returns lower triangular matrix (MNP package) */void dcholdc(std::vector<std::vector<double> >& X, int size, std::vector<std::vector<double> >& L)
+/* Cholesky decomposition, returns lower triangular matrix (MNP package) */
+void dcholdc(std::vector<std::vector<double> >& X, int size, std::vector<std::vector<double> >& L)
 {
   int i, j, k, errorM;
   double* pdTemp = new double[(int)(size * size)];
@@ -688,7 +689,8 @@ void rMVN(
 }
 
 /*Get indicators lind and rind for the to-swap kid(s)*/
-void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
+void swapkidInd(tree::tree_cp n1, tree::tree_cp n2, int* lind, int* rind){
+  GetRNGstate();
   double u;
   if( (n1->l) && (n2->l) ){ //both nodes have rules
     if( (n1->v == n2->v) && (n1->c == n2->c) ){ //both nodes have the same rule
@@ -709,6 +711,7 @@ void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
         *lind = 0; *rind = 1;
       }
   }
+  PutRNGstate();
 }
 
 
@@ -846,9 +849,9 @@ void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
     double LT = 0;
     double a, b;
 
-    double* bnn = new double[(int) (bnv.size()) ];
-    double* bnsy = new double[(int) (bnv.size()) ];
-    double* bnsy2 = new double[(int) (bnv.size()) ];
+    double* bnn = new double[(int) (bnv.size()) ]();
+    double* bnsy = new double[(int) (bnv.size()) ]();
+    double* bnsy2 = new double[(int) (bnv.size()) ]();
 
     for(size_t i=0;i<di.n_samp;i++) {
 
@@ -906,7 +909,7 @@ void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
   /*x is the whole tree, n is an internal node of x*/
   /*this is only different from lilT in finding y in bn using map as in allsuff, might be faster */
   double lilT1(std::vector<std::vector<double> >& X, tree& x,
-              tree::tree_p n, xinfo& xi, pinfo& pi, dinfo& di, int upd){
+              tree::tree_p n, xinfo& xi, pinfo& pi, dinfo& di, tree::npv& nbnv, int upd){
 
     tree::tree_cp tbn; //the pointer to the bottom node for the current observations
     size_t ni;         //the  index into vector of the current bottom node
@@ -918,7 +921,7 @@ void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
     bvsz nb = bnv.size();
 
     std::map<tree::tree_cp,size_t> bnmap;
-    for(bvsz i=0;i!=nb;i++) bnmap[bnv[i]]=i;
+    for(size_t i=0;i!=(size_t) nb;i++) bnmap[bnv[i]]= i;
 
 
     double* xx = new double[di.n_cov];
@@ -927,9 +930,9 @@ void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
     double LT = 0;
     double a, b;
 
-    double* bnn = new double[(int) nb];
-    double* bnsy = new double[(int) nb];
-    double* bnsy2 = new double[(int) nb];
+    double* bnn = new double[(int) nb]();
+    double* bnsy = new double[(int) nb]();
+    double* bnsy2 = new double[(int) nb]();
 
     for(size_t i=0;i<di.n_samp;i++) {
 
@@ -942,20 +945,20 @@ void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
       tbn = x.bn(xx,xi);
       ni = bnmap[tbn];
 
-      bnn[ni]++;
+      ++(bnn[ni]);
       bnsy[ni] += y;
       bnsy2[ni] +=  y*y;
 
     }//i
 
-    for(bvsz k = 0; k != nb; k++){
+    for(size_t k = 0; k != (size_t) nb; k++){
       if(bnn[k] == 0.0) return(10086.0);
     }//empty bottom node after action, invalid
 
 
     //update bn of the subtree rooted at n
 
-    tree::npv nbnv; //all the bottom nodes of x
+    nbnv.clear();//all the bottom nodes of subtree n
     n->getbots(nbnv);
 
     sig2 = pi.sigma * pi.sigma; // sigma^2
@@ -972,6 +975,7 @@ void swapkidInd(tree::tree_p n1, tree::tree_p n2, int* lind, int* rind){
       S = bnsy2[ni] - (bnn[ni]*yb2);
       d = bnn[ni]*tau2 + sig2;
       sum = S/sig2 + (bnn[ni]*yb2)/d;
+
       LT += -(bnn[ni]*LTPI/2.0) - (bnn[ni]-1)*log(pi.sigma) - log(d)/2.0 - sum/2.0;
 
       //update the mu’s if upd==1

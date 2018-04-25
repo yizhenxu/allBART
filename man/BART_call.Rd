@@ -9,9 +9,11 @@ BART_call(formula, data, test.data = NULL, Prior = NULL, Mcmc = NULL)
 \arguments{
 \item{formula}{response ~ covariates,}
 
+\item{data}{Training Data with the response,}
+
 \item{test.data}{Test Data, typically without the response,}
 
-\item{Prior}{List of Priors for MPBART: e.g., Prior = list(nu=3,sigq=0.9, ntrees=200,  kfac=2.0, pswap=0,  pbd=1.0, pb=0.5 , beta = 2.0, alpha = 0.95, nc = 100, priorindep = FALSE,  minobsnode = 10).
+\item{Prior}{List of Priors for MPBART: e.g., Prior = list(nu=3,sigq=0.9, ntrees=200,  kfac=2.0, pswap=0,  pbd=1.0, pb=0.5 , beta = 2.0, alpha = 0.95, nc = 100, minobsnode = 10).
 The components of Prior are
 \itemize{
 \item nu: The degree of freedom in the inverse chi-square prior distribution of the error variance.
@@ -24,13 +26,10 @@ The components of Prior are
 \item alpha : The prior probability of a bottom node splits is alpha/(1+d)^beta, d is depth of node.
 \item beta : see alpha.
 \item nc : The number of equally spaced cutpoints between min and max for each covariate.
-\item priorindep
 \item minobsnode : The minimum number of observations in bottom nodes for birth in simulating trees.
 }}
 
 \item{Mcmc}{List of MCMC starting values, burn-in ...: e.g.,     list(burn = 100, ndraws = 1000)}
-
-\item{train.data}{Training Data with the response,}
 }
 \value{
 treefit_train ndraws x n posterior matrix of the training data sum of trees fit,
@@ -45,4 +44,27 @@ sigmasample posterior samples of the error standard deviation.
 }
 \description{
 Bayesian Additive Regression Trees Modeling for Continuous Outcome,
+}
+\examples{
+##simulate data (example from Friedman MARS paper)
+f = function(x){
+ 10*sin(pi*x[,1]*x[,2]) + 20*(x[,3]-.5)^2+10*x[,4]+5*x[,5]
+}
+sigma = 1.0 #y = f(x) + sigma*z , z~N(0,1)
+n = 100 #number of observations
+set.seed(99)
+x=matrix(runif(n*10),n,10) #10 variables, only first 5 matter
+Ey = f(x)
+y=Ey+sigma*rnorm(n)
+dat = data.frame(x,y)
+fml = as.formula("y ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10")
+bfit = BART_call(fml, data = dat, test.data = NULL,
+                Prior = list(nu = 3, sigq = 0.9,
+                             ntrees = 100,
+                             kfac = 2,
+                             pswap = 0.1, pbd = 0.5, pb = 0.25,
+                             alpha = 0.95, beta = 2.0,
+                             nc = 100, minobsnode = 10),
+                Mcmc = list(burn=100, ndraws = 1000))
+
 }

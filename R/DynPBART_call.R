@@ -1,9 +1,9 @@
 #'Probit Bayesian Additive Regression Trees
 #'
-#'Bayesian Additive Regression Trees Modeling for Binary Outcome,
+#'Bayesian Additive Regression Trees Modeling for Binary Outcome for Dynamic Data,
 #'@param formula response ~ covariates,
-#'@param data Training Data with the response taking values 0-1,
-#'@param test.data Test Data, typically without the response,
+#'@param data Training data with the response taking values 0-1,
+#'@param test.data Test data with number of rows equals nsamp x ndraws, typically without the response. For the ith subject, (i, i+nsamp, ..., i+(ndraws-1)nsamp) rows are its simulated posterior outcomes from the previous simulation,
 #'@param Prior List of Priors for MPBART: e.g., Prior = list(ntrees=200,  kfac=2.0, pswap=0,  pbd=1.0, pb=0.5 , beta = 2.0, alpha = 0.95, nc = 100, minobsnode = 10).
 #'The components of Prior are
 #' \itemize{
@@ -30,25 +30,39 @@
 #'sigma = 1.0 #y = f(x) + sigma*z , z~N(0,1)
 #'n = 100 #number of observations
 #'set.seed(99)
+#'###############################################
+#'nd = 1000 # ndraws
+#'x1 = matrix(runif(n*9),n,9) #10 variables, only first 5 matter
+#'x1 = x1[rep(1:n,nd),]
+#'x2 = runif(n*nd)
+#'x = cbind(x1, x2)
+#'Ey = f(x)
+#'u=Ey+sigma*rnorm(n*nd)
+#'z = (u-min(u))/(max(u)-min(u))
+#'y = 1*(z<0.4)+ 2*(z>=0.4 & z<0.6) + 3*(z>=0.6)
+#'tdat = data.frame(x,y)
+#'###############################################
 #'x=matrix(runif(n*10),n,10) #10 variables, only first 5 matter
 #'Ey = f(x)
 #'u=Ey+sigma*rnorm(n)
 #'z = (u-min(u))/(max(u)-min(u))
 #'y= rbinom(100, 1, z)
 #'dat = data.frame(x,y)
+#'colnames(tdat) = colnames(dat)
+#'###############################################
 #'fml = as.formula("y ~ X1+X2+X3+X4+X5+X6+X7+X8+X9+X10")
-#'bpfit = PBART_call(fml, data = dat, test.data = NULL,
+#'bpfit = DynPBART_call(fml, data = dat, test.data = tdat,
 #'                 Prior = list(ntrees = 100,
 #'                              kfac = 2,
 #'                              pswap = 0.1, pbd = 0.5, pb = 0.25,
 #'                              alpha = 0.95, beta = 2.0,
 #'                              nc = 100, minobsnode = 10),
-#'                 Mcmc = list(burn=100, ndraws = 1000))
+#'                 Mcmc = list(burn=100, ndraws = nd))
 #'
 #'@import bayesm mlbench mlogit cvTools stats
 #'@export
 #'@useDynLib allBART
-PBART_call  <- function(formula, data, test.data = NULL,
+DynPBART_call  <- function(formula, data, test.data = NULL,
                         Prior = NULL, Mcmc = NULL)
 {
 
@@ -87,6 +101,16 @@ PBART_call  <- function(formula, data, test.data = NULL,
   }
 
   if (!is.null(test.data)){
+
+    if(is.null(Mcmc$ndraws))
+      stop(paste("Error: ndraws is required for dynamic model calls."))
+
+    ndraws=Mcmc$ndraws
+    testnsub = nrow(test.data) / ndraws
+
+    if(testnsub %% 1 != 0)
+      stop(paste("Error: testn does not equal to test.nsub x ndraws."))
+
     if(length(xcolnames) == 1 ){
       Xtest <- data.frame(test.data[,xcolnames])
       names(Xtest) <- xcolnames[1]
@@ -94,7 +118,7 @@ PBART_call  <- function(formula, data, test.data = NULL,
       Xtest <- test.data[,xcolnames]
     }
   } else {
-    Xtest = 0
+    stop(paste("Error: no test data, please use PBART_call instead."))
   }
 
 
@@ -132,7 +156,7 @@ PBART_call  <- function(formula, data, test.data = NULL,
 
 
   if(is.null(Mcmc$burn)) {burn=100} else {burn=Mcmc$burn}
-  if(is.null(Mcmc$ndraws)) {ndraws=1000} else {ndraws=Mcmc$ndraws}
+  #if(is.null(Mcmc$ndraws)) {ndraws=1000} else {ndraws=Mcmc$ndraws}
 
   cat("Number of trees: ", ntrees, ".\n\n", sep="")
   cat("Number of draws: ", ndraws, ".\n\n", sep="")
@@ -140,7 +164,7 @@ PBART_call  <- function(formula, data, test.data = NULL,
 
 
 
-  res =   .C('mypbart',
+  res =   .C('mydynpbart',
              trainx= as.double(t(Data$X)),
              testx= as.double(t(testData$X)),
              mu = as.double(rep(0,nrow(Data$X))),
@@ -148,6 +172,7 @@ PBART_call  <- function(formula, data, test.data = NULL,
              y = as.double(Data$y),
              n_cov = as.integer(ncol(Data$X)),
              testn = as.integer(testn),
+             testnsub = as.integer(testnsub),
              ndraws = as.integer(ndraws),
              burn = as.integer(burn),
              ntrees = as.integer(ntrees),
@@ -159,7 +184,7 @@ PBART_call  <- function(formula, data, test.data = NULL,
              beta =  as.double(beta),
              nc = as.integer(nc),
              minobsnode = as.integer(minobsnode),
-             vec_test = as.double(rep(0,testn*ndraws)),
+             vec_test = as.double(rep(0,testn)),
              vec_train = as.double(rep(0,n*ndraws)),
              binaryX = as.integer(binaryX))
 
@@ -175,10 +200,10 @@ PBART_call  <- function(formula, data, test.data = NULL,
 
   if (!is.null(test.data)){
     yhat.test = res$vec_test
-    vec_samp_test = rnorm(testn*ndraws, yhat.test, 1)
+    vec_samp_test = rnorm(testn, yhat.test, 1)
     vec_samp_test = 1*(vec_samp_test > 0)
-    vec_samp_test = matrix(vec_samp_test, nrow = testn)
-    yhat.test = matrix(yhat.test, nrow = testn)
+    vec_samp_test = matrix(vec_samp_test, nrow = testnsub)
+    yhat.test = matrix(yhat.test, nrow = testnsub)
 
   } else {
     vec_samp_test <- NULL

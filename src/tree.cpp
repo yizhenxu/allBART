@@ -203,6 +203,7 @@ bool tree::isnog() const
 bool tree::death(size_t nid, double mu)
 {
   tree_p nb = getptr(nid);
+
   if(nb==0) {
     error("error in death, nid invalid\n");
     return false;
