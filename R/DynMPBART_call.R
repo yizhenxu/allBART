@@ -75,7 +75,6 @@
 DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
                          Prior = NULL, Mcmc = NULL)
 {
-
   callT <- match.call(expand.dots = TRUE)
 
   formula <- mFormula(formula)
@@ -131,6 +130,8 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
 
   X <- model.matrix.default(Terms, mf)
 
+
+
   xcolnames <- colnames(X)[-1]
 
   if(length(xcolnames) == 1 ){
@@ -141,17 +142,7 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
 
     X <- X[,xcolnames]
   }
-
   if (!is.null(test.data)){
-
-    if(is.null(Mcmc$ndraws))
-      stop(paste("Error: ndraws is required for dynamic model calls."))
-
-    ndraws=Mcmc$ndraws
-    testnsub = nrow(test.data) / ndraws
-
-    if(testnsub %% 1 != 0)
-      stop(paste("Error: testn does not equal to test.nsub x ndraws."))
 
     if(length(xcolnames) == 1 ){
       Xtest <- data.frame(test.data[,xcolnames])
@@ -161,17 +152,17 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
     }
 
   } else {
-    stop(paste("Error: no test data, please use MPBART_call instead."))
+    Xtest = 0
   }
 
   Data = list(p=p,y=Y,X= X)
   testData = list(p=p,X= Xtest)
 
+
   cat("Table of y values",fill=TRUE)
   print(table(model.response(mf) ))
 
-  print(head(Data$X))
-  print(head(Data$y))
+
   n=length(Data$y)
 
   pm1=p-1
@@ -211,7 +202,7 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
   if(is.null(Mcmc$sigma0)) {sigma0=diag(pm1)} else {sigma0=Mcmc$sigma0}
 
   if(is.null(Mcmc$burn)) {burn=100} else {burn=Mcmc$burn}
-  #if(is.null(Mcmc$ndraws)) {ndraws=1000} else {ndraws=Mcmc$ndraws}
+  if(is.null(Mcmc$ndraws)) {ndraws=1000} else {ndraws=Mcmc$ndraws}
   if(is.null(Mcmc$nSigDr)) {nSigDr=50} else {nSigDr=Mcmc$nSigDr}
   if(is.null(Mcmc$keep_sigma_draws)) {keep_sigma_draws=FALSE} else {keep_sigma_draws=Mcmc$keep_sigma_draws}
 
@@ -224,16 +215,19 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
     savesigma = 1;
   }
 
+  testnsub = testn / ndraws;
+  if(testnsub %% 1 !=0) stop("testn should be a multiplier of ndraws.")
+
   cat("Number of trees: ", ntrees, ".\n\n", sep="")
   cat("Number of draws: ", ndraws, ".\n\n", sep="")
   cat("burn-in: ", burn, "'\n\n", sep="")
 
-  cat("testnsub: ", testnsub, "'\n\n", sep="")
 
-  res =   .C('mydynmpbart',w=as.double(rep(0,nrow(Data$X))),
+
+  res =   .C('mydynmpbart',w=as.double(rep(0,pm1*nrow(Data$X))),
              trainx= as.double(t(Data$X)),
              testx= as.double(t(testData$X)),
-             mu = as.double(rep(0,nrow(Data$X))),
+             mu = as.double(rep(0,pm1*nrow(Data$X))),
              sigmai = as.double(sigmai),
              V = as.double(V),
              n = as.integer(length(Data$y)),
@@ -257,17 +251,16 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
              savesigma = as.integer(savesigma),
              minobsnode = as.integer(minobsnode),
              sigmasample = sigmasample,
-             vec_test = as.integer(rep(0,testn*ndraws)),
+             vec_test = as.integer(rep(0,testnsub*ndraws)),
              vec_train = as.integer(rep(0,n*ndraws)),
              binaryX = as.integer(binaryX))
-#  change : vec_test = as.integer(rep(0,testnsub*ndraws)),
+
   relvelved = as.numeric(relvelved)
   vec_class_train <- matrix(relvelved[res$vec_train], nrow = n)
 
   if (!is.null(test.data)){
 
-    #vec_class_test <- matrix(relvelved[res$vec_test], nrow = testnsub)
-    vec_class_test <- matrix(relvelved[res$vec_test], nrow = testn)
+    vec_class_test <- matrix(relvelved[res$vec_test], nrow = testnsub)
 
   } else {
     vec_class_test <- NULL

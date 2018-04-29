@@ -17,7 +17,8 @@ extern "C" {
 
   void mydynmpbart(double *w, double  *pX, double *testpX, double *mu, double *sigmai, double *V,
                    int *pn, int *pn_dim, int *y, int *pn_cov, int *pnu,
-                   int *testn, int *testnsub,
+                   int *testn,
+                   int *testnsub,
                    int *pndraws,
                    int *pburn,
                    int *pntrees,
@@ -46,7 +47,7 @@ extern "C" {
     dinfo di; dinfo dip;
     di.n_samp = *pn; di.n_cov = *pn_cov; di.n_dim = *pn_dim;
     if(*testn){
-      dip.n_samp = *testn; dip.n_cov = *pn_cov; dip.n_dim = *pn_dim; dip.y=0;
+      dip.n_samp = *testnsub; dip.n_cov = *pn_cov; dip.n_dim = *pn_dim; dip.y=0;
     }
 
 
@@ -74,39 +75,35 @@ extern "C" {
     for(size_t i=0; i < di.n_samp; i++){
       for(size_t k=0; k< di.n_cov; k++){
         XMat[i][k] = pX[itemp++];
-        //std::cout<<"Xi,k"<<i<<","<<k<<"="<<XMat[i][k]<<"\n";
-        Rprintf("Xmat[%d][%d] = %f\n", i, k, XMat[i][k]);
       }
     }
-    ////
-
-    //for(size_t k=0; k<di.n_dim; k++){
-    //  for(size_t i=0;i<di.n_samp;i++) {
-    //   std::cout<< "allfit at ("<<k<<","<<i<< " is "<<allfit[k][i]<<"\n";
-    //  }
-    //}
 
     size_t nd = *pndraws; //number of mcmc iterations
 
-    std::vector<std::vector<double> > testXMat; /* The test.data of dimensions nsub_test x ncov*/
-    testXMat.resize(dip.n_samp);
-
-    for(size_t i=0; i < dip.n_samp; i++){
-      testXMat[i].resize(dip.n_cov);
+    std::vector<std::vector<std::vector<double> > > testXMat; /* The test.data of dimensions nsub_test x ncov*/
+    testXMat.resize(nd);
+    for(size_t j=0; j < nd; j++){
+      testXMat[j].resize(dip.n_samp);
     }
 
-    itemp = 0;
-    for(size_t i=0; i < dip.n_samp; i++){
-      for(size_t k=0; k< dip.n_cov; k++){
-        testXMat[i][k] = testpX[itemp++];
+    for(size_t j=0; j < nd; j++){
+      for(size_t i=0; i < dip.n_samp; i++){
+        testXMat[j][i].resize(dip.n_cov);
       }
     }
-    ////
+    itemp = 0;
+    for(size_t j=0; j < nd; j++){
+      for(size_t i=0; i < dip.n_samp; i++){
+        for(size_t k=0; k< dip.n_cov; k++){
+          testXMat[j][i][k] = testpX[itemp++];
+        }
+      }
+    }
 
     xinfo xi; /* The cutpoint matrix (ncov x nc) */
     int nc=*pnc; // number of equally spaced cutpoints between min and max.
     getcutpoints(nc, (int)di.n_cov, (int)di.n_samp, XMat, xi);
-
+    ////
 
     std::vector<std::vector<double> > allfit; /* The sum of fit of all trees for train.data (nlatent x nsub)*/
     std::vector<std::vector<double> > wtilde; /* (nlatent x nsub) */
@@ -242,7 +239,7 @@ extern "C" {
 
 
     double alpha2, alpha2old, ss;
-
+    int sigdrawcounter = 0;
     //MCMC
 
 
@@ -250,8 +247,7 @@ extern "C" {
     time_t tp;
     int time1 = time(&tp);
 
-    /* Initialize counters for outputs psigmasample, vec_class_pred_test and vec_class_pred_train */
-    int sigdrawcounter = 0;
+    /* Initialize counters for outputs vec_class_pred_test and vec_class_pred_train */
     int countvectest = 0;
     int countvectrain = 0;
 
@@ -283,9 +279,7 @@ extern "C" {
     }
     /* ss = trace(V x inverse(Sigma)) */
     for(size_t j=0;j<di.n_dim;j++) ss+=mtemp1[j][j];
-    /* alpha^2 = trace(V x inverse(Sigma)) / rchisq */
-    alpha2=ss/(double)rchisq((double)nu*di.n_dim);
-
+    /* alpha^2 = trace(V x inverse(Sigma)) / rchisq */alpha2=ss/(double)rchisq((double)nu*di.n_dim);
     /* Step 1 (c) */
     for(size_t k=0; k<di.n_dim; k++){
       for(size_t i=0;i<di.n_samp;i++) {
@@ -315,20 +309,16 @@ extern "C" {
 
       for(size_t k=0; k<di.n_dim; k++){
         di.y = &r[k][0];
-
         pi.sigma = sqrt(alpha2) * condsig[k]; //sqrt psi_k tilde
-        bool sh;
-        sh = bd(XMat, t[ntree][k], xi, di, pi, minobsnode, binaryX);
-        Rprintf("bd = %d\n", sh);
+        bd(XMat, t[ntree][k], xi, di, pi, minobsnode, binaryX);
         fit(t[ntree][k], XMat, di, xi, ftemp[k]);
-
         for(size_t i=0;i<di.n_samp;i++) {
-          Rprintf("\n new tree fit ftemp at %d , %d = %f \n",k,i,ftemp[k][i]);
           allfit[k][i] += ftemp[k][i]	;
         }
       }
 
     }//ntree
+
 
     //done sampling (T,M)
 
@@ -355,11 +345,6 @@ extern "C" {
       }
     }
 
-    for(size_t j=0;j<di.n_dim;j++){
-      for(size_t k=0;k<di.n_dim;k++){
-        Rprintf("WishMat1[%d][%d] = %f\n", j, k, WishMat1[j][k]);
-      }
-    }
 
     dinv(WishMat1 ,di.n_dim,WishMat1Inv);
 
@@ -442,7 +427,6 @@ extern "C" {
     /* Make Predictions */
     if(loop>=burn){
       dinv(SigmaTmpInv ,di.n_dim,SigmaTmp);
-
       for(size_t k = 0; k <di.n_samp; k++){
         max_temp = R_NegInf;
         for(size_t l=0; l<di.n_dim; l++){
@@ -461,7 +445,6 @@ extern "C" {
           pclass = (int)maxy;
         }
         vec_class_pred_train[countvectrain] = pclass;
-
         countvectrain++;
         //cout << "pclass: " << pclass << endl;
       }//end prediction for train
@@ -477,11 +460,8 @@ extern "C" {
 
         for(size_t l = 0; l < dip.n_dim; l++){
           for(size_t j=0;j<m;j++) {
-            fit(t[j][l], testXMat, dip, xi, fpredtemp);
-            for(size_t k=0;k<dip.n_samp;k++){
-              Rprintf("\n test prediction at tree %d , person %d, dim %d= %f \n",j,k,l,fpredtemp[k]);
-              ppredmeanvec[l][k] += fpredtemp[k];
-            }
+            fit(t[j][l], testXMat[loop-burn], dip, xi, fpredtemp);
+            for(size_t k=0;k<dip.n_samp;k++) ppredmeanvec[l][k] += fpredtemp[k];
           }
         }
 
