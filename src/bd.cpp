@@ -19,11 +19,12 @@ That is how the old code works.
 
 bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pinfo& pi, size_t minobsnode, int *binaryX)
 {
-  GetRNGstate();
+  //GetRNGstate();
   tree::npv goodbots;  //nodes we could birth at (split on)
   double PBx = getpb(x,xi,pi,goodbots); //prob of a birth at x
-  double u = unif_rand();
-  Rprintf("u = %f, PBx = %f\n", u, PBx);
+  double u;
+  u = unif_rand();
+  //Rprintf("u = %f, PBx = %f\n", u, PBx);
   if(u < PBx) { //do birth
 
     //--------------------------------------------------
@@ -384,5 +385,5 @@ bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pin
     }
 
   } //End if-else
-  PutRNGstate();
+  //PutRNGstate();
 }
