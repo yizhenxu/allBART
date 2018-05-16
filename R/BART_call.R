@@ -20,11 +20,17 @@
 #'\item minobsnode : The minimum number of observations in bottom nodes for birth in simulating trees.
 #'}
 #'@param Mcmc List of MCMC starting values, burn-in ...: e.g.,     list(burn = 100, ndraws = 1000)
+#'@param diagnostics Returns convergence diagnostics and variable inclusion proportions if True (default),
 #'@return treefit_train ndraws x n posterior matrix of the training data sum of trees fit,
 #'@return treefit_test ndraws x testn posterior matrix of the test data sum of trees fit,
 #'@return samp_train ndraws x n posterior matrix of the training data outcome,
 #'@return samp_test ndraws x testn posterior matrix of the test data outcome,
 #'@return sigmasample posterior samples of the error standard deviation.
+#'@return Percent_Acceptance Percent acceptance of Metropolis-Hastings proposals across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Tree_Num_Nodes Average number of tree nodes across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Tree_Num_Leaves Average number of leaves across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Tree_Depth Average tree depth across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Inclusion_Proportions Predictor inclusion frequencies. Smaller value of ntrees (such as 10, 20, 50, 100) is recommended for the purposes of variable selection.
 #'@examples
 #'##simulate data (example from Friedman MARS paper)
 #'f = function(x){
@@ -51,7 +57,7 @@
 #'@export
 #'@useDynLib allBART
 BART_call  <- function(formula, data, test.data = NULL,
-                       Prior = NULL, Mcmc = NULL)
+                       Prior = NULL, Mcmc = NULL, diagnostics = TRUE)
 {
 
   callT <- match.call(expand.dots = TRUE)
@@ -183,7 +189,15 @@ BART_call  <- function(formula, data, test.data = NULL,
              sigmasample = sigmasample,
              vec_test = as.double(rep(0,testn*ndraws)),
              vec_train = as.double(rep(0,n*ndraws)),
-             binaryX = as.integer(binaryX))
+             binaryX = as.integer(binaryX),
+             diagnostics = as.integer(diagnostics),
+             percA = as.double(rep(0, ndraws)),
+             numNodes = as.double(rep(0, ndraws)),
+             numLeaves = as.double(rep(0, ndraws)),
+             treeDepth = as.double(rep(0, ndraws)),
+             incProp = as.double(rep(0, ncol(Data$X))) )
+
+  names(res$incProp) = colnames(Data$X)
 
   sigmasample = res$sigmasample*(rgy[2]-rgy[1])
 
@@ -211,11 +225,25 @@ BART_call  <- function(formula, data, test.data = NULL,
     yhat.test <- NULL
   }
 
-  ret = list(treefit_test = yhat.test,
-             treefit_train = yhat.train,
-             samp_test = vec_samp_test,
-             samp_train = vec_samp_train,
-             sigmasample = sigmasample);
+  if(diagnostics){
+    ret = list(treefit_test = yhat.test,
+               treefit_train = yhat.train,
+               samp_test = vec_samp_test,
+               samp_train = vec_samp_train,
+               sigmasample = sigmasample,
+               Percent_Acceptance = res$percA,
+               Tree_Num_Nodes = res$numNodes,
+               Tree_Num_Leaves = res$numLeaves,
+               Tree_Depth = res$treeDepth,
+               Inclusion_Proportions = res$incProp);
+  } else {
+    ret = list(treefit_test = yhat.test,
+               treefit_train = yhat.train,
+               samp_test = vec_samp_test,
+               samp_train = vec_samp_train,
+               sigmasample = sigmasample);
+  }
+
 
   return(ret)
 }

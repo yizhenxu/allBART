@@ -392,3 +392,18 @@ void tree::DownMinMax(size_t vv, int* L, int* U)
   }
 
 }
+
+
+//--------------------
+//x.Dbots(0,tree_depth): to get the number of bottom nodes of x on the level of tree_depth
+//x.Dbots(d1, d2):say the current x has depth d1, get the number of bn of x on the level d1+d2
+double tree::Dbots(int dnow, int td)
+{
+  if(l==0) {
+    if(dnow == td) {
+      return 1.0;
+    } else {
+      return 0.0;
+    }
+  } else return( l->Dbots(dnow+1, td) + r->Dbots(dnow+1, td) );
+}

@@ -222,8 +222,6 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
   cat("Number of draws: ", ndraws, ".\n\n", sep="")
   cat("burn-in: ", burn, "'\n\n", sep="")
 
-
-
   res =   .C('mydynmpbart',w=as.double(rep(0,pm1*nrow(Data$X))),
              trainx= as.double(t(Data$X)),
              testx= as.double(t(testData$X)),

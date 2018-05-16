@@ -19,6 +19,7 @@ public:
 
 
   friend bool bd(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pinfo& pi, size_t minobsnode, int *binaryX);
+  friend bool bd1(std::vector<std::vector<double> >& X, tree& x, xinfo& xi, dinfo& di, pinfo& pi, size_t minobsnode, int *binaryX, double* nLtD, double* pA, double* nN, double* nL, double* tD, std::vector<double>& iP);
 
 
   //------------------------------
@@ -60,6 +61,8 @@ public:
   size_t treesize() const; //number of nodes in tree
   size_t nnogs() const;    //number of nog nodes (no grandchildren nodes)
   size_t nbots() const;    //number of bottom nodes
+  double Dbots(int dnow, int td); //number of bottom nodes at depth td-dnow
+
   //birth death using nid----------
   bool birth(size_t nid,size_t v, size_t c, double ml, double mr);
   bool death(size_t nid, double mu);
@@ -100,7 +103,7 @@ public:
   tree_p l; //left child
   tree_p r; //right child
   //------------------------------
-  //utiity functions
+  //utility functions
   void cp(tree_p n,  tree_cp o); //copy tree o to n
   void pcp(tree_cp o);//copy tree o to current pointer (assumed empty)
 
