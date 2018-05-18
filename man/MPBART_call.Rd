@@ -4,8 +4,8 @@
 \alias{MPBART_call}
 \title{Multinomial Probit Bayesian Additive Regression Trees}
 \usage{
-MPBART_call(formula, data, base = NULL, test.data = NULL, Prior = NULL,
-  Mcmc = NULL, varying = NULL, sep = ".")
+MPBART_call(formula, data, base = NULL, test.data = NULL, varying = NULL,
+  sep = ".", Prior = NULL, Mcmc = NULL, diagnostics = TRUE)
 }
 \arguments{
 \item{formula}{response ~ demographic covariates. Demographic covariates are the covariates that are not specific to levels of the multinomial response,}
@@ -15,6 +15,10 @@ MPBART_call(formula, data, base = NULL, test.data = NULL, Prior = NULL,
 \item{base}{order index of the reference level of the multinomial response. For example, if the response takes values 2, 3, and 4, then base = 2 sets response value 3 as the reference. Default is the highest class,}
 
 \item{test.data}{Test Data in wide format, typically without the response,}
+
+\item{varying}{The indeces of the variables in the train.data that are alternative specific. The length of varying should be a multiple of the number of levels in the multinomial response,}
+
+\item{sep}{The seperator of the variable name and the alternative level in the alternative specific covariates. The default separator is dot (.).}
 
 \item{Prior}{List of Priors for MPBART: e.g., Prior = list(nu=p+2,  V= diag(p - 1), ntrees=200,  kfac=2.0, pswap=0,  pbd=1.0, pb=0.5 , beta = 2.0, alpha = 0.95, nc = 100, minobsnode = 10).
 The components of Prior are
@@ -39,16 +43,24 @@ The components of Mcmc are
 \item nSigDr: User-specified upper limit to repeated draws of the covariance variance matrix of latent variables in each round of posterior draw when condition 10 in Jiao and van Dyk 2015 is not satisfied. Default 50.
 }}
 
-\item{varying}{The indeces of the variables in the train.data that are alternative specific. The length of varying should be a multiple of the number of levels in the multinomial response,}
-
-\item{sep}{The seperator of the variable name and the alternative level in the alternative specific covariates. The default separator is dot (.).}
+\item{diagnostics}{Returns convergence diagnostics and variable inclusion proportions if True (default),}
 }
 \value{
 samp_train ndraws x n posterior matrix of the training data outcome,
 
 samp_test ndraws x testn posterior matrix of the test data outcome,
 
-sigmasample posterior samples of the latent variable covariance matrix.
+sigmasample posterior samples of the latent variable covariance matrix,
+
+Percent_Acceptance Percent acceptance of Metropolis-Hastings proposals across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Num_Nodes Average number of tree nodes across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Num_Leaves Average number of leaves across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Depth Average tree depth across the ntrees number of trees for each posterior draw after burn-in,
+
+Inclusion_Proportions Predictor inclusion frequencies. Smaller value of ntrees (such as 10, 20, 50, 100) is recommended for the purposes of variable selection.
 }
 \description{
 Multinomial probit modeling using Bayesian Additive Regression Trees,

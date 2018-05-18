@@ -32,7 +32,13 @@ extern "C" {
                int *pminobsnode,
                double *vec_test,
                double *vec_train,
-               int *binaryX){
+               int *binaryX,
+               int *diagnostics,
+               double *percA,
+               double *numNodes,
+               double *numLeaves,
+               double *treeDepth,
+               double *incProp){
     //    *pX is n_samp x n_cov  matrix
     //    *y is binary
 
@@ -134,6 +140,40 @@ extern "C" {
 
     double u,Z; //for updating latent w
 
+    int dgn = *diagnostics;
+    //percA[i] = average over all percAtmp for draw i
+    std::vector<double> percAtmp;
+    percAtmp.resize(m);
+    //numNodes[i] = average over all numNodestmp for draw i
+    std::vector<double> numNodestmp;
+    numNodestmp.resize(m);
+    //numLeaves[i] = average over all numLeavestmp for draw i
+    std::vector<double> numLeavestmp;
+    numLeavestmp.resize(m);
+    //treeDepth[i] = average over all treeDepthtmp for draw i
+    std::vector<double> treeDepthtmp;
+    treeDepthtmp.resize(m);
+    //nLtD[i] = number of leaves at tree depth of the ith tree for the current round of trai
+    std::vector<double> nLtDtmp;
+    nLtDtmp.resize(m);
+
+    for(size_t i=0; i<m; i++){
+      percAtmp[i] = 0.0;
+      numNodestmp[i] = 1.0;
+      numLeavestmp[i] = 1.0;
+      treeDepthtmp[i] = 0.0;
+      nLtDtmp[i] = 1.0;
+    }
+
+    //incProptmp[j] = count occurence of xj in splitting rules for the current round of draw
+    //incProp[j] = average of incProptmp[j] over all draws
+    std::vector<double> incProptmp;
+    incProptmp.resize(di.n_cov);
+
+    for(size_t i=0; i<di.n_cov; i++){
+      incProptmp[i] = 0.0;
+    }
+
     //MCMC
 
 
@@ -160,7 +200,13 @@ extern "C" {
         }
 
         di.y = &rtemp[0];
-        bd(XMat, t[ntree], xi, di, pi, minobsnode, binaryX);
+
+        if(dgn){
+          bd1(XMat, t[ntree], xi, di, pi, minobsnode, binaryX, &nLtDtmp[ntree], &percAtmp[ntree], &numNodestmp[ntree], &numLeavestmp[ntree], &treeDepthtmp[ntree], incProptmp);
+        } else {
+          bd(XMat, t[ntree], xi, di, pi, minobsnode, binaryX);
+        }
+
         fit(t[ntree], XMat, di, xi, ftemp);
         for(size_t i=0;i<di.n_samp;i++) {
           allfit[i] += ftemp[i];
@@ -182,6 +228,29 @@ extern "C" {
       }
 
       if(loop>=burn){
+
+        if(dgn){
+          for(size_t i=0;i<m;i++) {
+            percA[loop-burn] += percAtmp[i];
+            numNodes[loop-burn] += numNodestmp[i];
+            numLeaves[loop-burn] += numLeavestmp[i];
+            treeDepth[loop-burn] += treeDepthtmp[i];
+          }
+          percA[loop-burn] /= m;
+          numNodes[loop-burn] /= m;
+          numLeaves[loop-burn] /= m;
+          treeDepth[loop-burn] /= m;
+
+          double numsplits = 0;
+          for(size_t i=0; i<di.n_cov; i++){
+            //std::cout<< "loop"<<loop<<" "<<incProptmp[i] <<" \n";
+            numsplits += incProptmp[i];
+          }
+          for(size_t i=0; i<di.n_cov; i++){
+            incProp[i] += incProptmp[i]/numsplits;//proportion of all splitting rules that uses xi
+          }
+        }
+
         for(size_t k = 0; k <di.n_samp; k++){
           vec_train[countvectrain] = allfit[k];
           countvectrain++;
@@ -210,6 +279,12 @@ extern "C" {
       PutRNGstate();
 
     } //end of loop
+
+    if(dgn){
+      for(size_t i=0; i<di.n_cov; i++){
+        incProp[i] /= nd;
+      }
+    }
 
     int time2 = time(&tp);
     Rprintf("time for mcmc loop %d secs", time2-time1);

@@ -3,7 +3,7 @@
 #'Plot average M-H acceptance percentage, tree nodes, tree leaves, tree depth, and predictor inclusion proportions.
 #'@param bfit Fitted object from BART related calls,
 #'@param response_type Type of the response variable. Options are "continuous", "binary", and "multinomial",
-#'@param plot_type 1 for 2x2 diagnostic plots of average M-H acceptance percentage, tree nodes, tree leaves, and tree depth; 0 for predictor inclusion proportions plot,
+#'@param plot_type 0 for predictor inclusion proportions plot; 1 for diagnostic plots of average M-H acceptance percentage, tree nodes, tree leaves, and tree depth,
 #'@return Percent_Acceptance Percent acceptance of Metropolis-Hastings proposals across the ntrees number of trees for each posterior draw after burn-in,
 #'@return Tree_Num_Nodes Average number of tree nodes across the ntrees number of trees for each posterior draw after burn-in,
 #'@return Tree_Num_Leaves Average number of leaves across the ntrees number of trees for each posterior draw after burn-in,
@@ -34,24 +34,59 @@
 #'@export
 DiagPlot <- function(bfit,response_type, plot_type){
   nd = dim(bfit$samp_train)[2]
-  if(plot_type){
-    par(mfrow=c(2,2))
-    scatter.smooth(1:nd, bfit$Percent_Acceptance, lpars =
-                     list(col = "red", lwd = 3, lty = 3)
-                   , xlab = "MCMC Iteration", ylab = "% of Tree Acceptance")
-    scatter.smooth(1:nd, bfit$Tree_Num_Nodes, lpars =
-                     list(col = "red", lwd = 3, lty = 3)
-                   , xlab = "MCMC Iteration", ylab = "Average Num of Tree Nodes")
-    scatter.smooth(1:nd, bfit$Tree_Num_Leaves, lpars =
-                     list(col = "red", lwd = 3, lty = 3)
-                   , xlab = "MCMC Iteration", ylab = "Average Num of Tree Leaves")
-    scatter.smooth(1:nd, bfit$Tree_Depth, lpars =
-                     list(col = "red", lwd = 3, lty = 3)
-                   , xlab = "MCMC Iteration", ylab = "Average Tree Depth")
-    par(mfrow=c(1,1))
-  } else {
-    tmp = bfit$Inclusion_Proportions
-    barplot(sort(tmp,decreasing = T), ylab = "Inclusion Proportion", las=2)
-  }
+  pm1 = dim(bfit$Inclusion_Proportions)[1]
+  if(plot_type){ #diagnostic plots
+    if(response_type=="multinomial"){
+      par(mfcol=c(4,pm1))
+
+      for(i in 1:pm1){
+        scatter.smooth(1:nd, bfit$Percent_Acceptance[i,], lpars =
+                         list(col = "red", lwd = 3, lty = 3)
+                       , xlab = "MCMC Iteration", ylab = "% of Tree Acceptance",main = paste0("latent ",i))
+        scatter.smooth(1:nd, bfit$Tree_Num_Nodes[i,], lpars =
+                         list(col = "red", lwd = 3, lty = 3)
+                       , xlab = "MCMC Iteration", ylab = "Average Num of Tree Nodes")
+        scatter.smooth(1:nd, bfit$Tree_Num_Leaves[i,], lpars =
+                         list(col = "red", lwd = 3, lty = 3)
+                       , xlab = "MCMC Iteration", ylab = "Average Num of Tree Leaves")
+        scatter.smooth(1:nd, bfit$Tree_Depth[i,], lpars =
+                         list(col = "red", lwd = 3, lty = 3)
+                       , xlab = "MCMC Iteration", ylab = "Average Tree Depth")
+      }
+
+      par(mfrow=c(1,1))
+    } else {
+      par(mfrow=c(2,2))
+      scatter.smooth(1:nd, bfit$Percent_Acceptance, lpars =
+                       list(col = "red", lwd = 3, lty = 3)
+                     , xlab = "MCMC Iteration", ylab = "% of Tree Acceptance")
+      scatter.smooth(1:nd, bfit$Tree_Num_Nodes, lpars =
+                       list(col = "red", lwd = 3, lty = 3)
+                     , xlab = "MCMC Iteration", ylab = "Average Num of Tree Nodes")
+      scatter.smooth(1:nd, bfit$Tree_Num_Leaves, lpars =
+                       list(col = "red", lwd = 3, lty = 3)
+                     , xlab = "MCMC Iteration", ylab = "Average Num of Tree Leaves")
+      scatter.smooth(1:nd, bfit$Tree_Depth, lpars =
+                       list(col = "red", lwd = 3, lty = 3)
+                     , xlab = "MCMC Iteration", ylab = "Average Tree Depth")
+      par(mfrow=c(1,1))
+    }
+
+  } else { #inclusion proportions
+    if(response_type=="multinomial"){
+      par(mfrow=c(1,pm1))
+
+      for(i in 1:pm1){
+        tmp = bfit$Inclusion_Proportions[i,]
+        barplot(sort(tmp,decreasing = T), ylab = "Inclusion Proportion", las=2, main=paste0("latent ",i))
+      }
+
+      par(mfrow=c(1,1))
+    } else {
+      tmp = bfit$Inclusion_Proportions
+      barplot(sort(tmp,decreasing = T), ylab = "Inclusion Proportion", las=2)
+    }
+
+  }#plot_type
 
 }

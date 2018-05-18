@@ -11,7 +11,7 @@ DiagPlot(bfit, response_type, plot_type)
 
 \item{response_type}{Type of the response variable. Options are "continuous", "binary", and "multinomial",}
 
-\item{plot_type}{1 for 2x2 diagnostic plots of average M-H acceptance percentage, tree nodes, tree leaves, and tree depth; 0 for predictor inclusion proportions plot,}
+\item{plot_type}{0 for predictor inclusion proportions plot; 1 for diagnostic plots of average M-H acceptance percentage, tree nodes, tree leaves, and tree depth,}
 }
 \value{
 Percent_Acceptance Percent acceptance of Metropolis-Hastings proposals across the ntrees number of trees for each posterior draw after burn-in,

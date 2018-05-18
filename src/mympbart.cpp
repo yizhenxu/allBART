@@ -33,7 +33,13 @@ extern "C" {
                 double *psigmasample,
                 int *vec_class_pred_test,
                 int *vec_class_pred_train,
-                int *binaryX){
+                int *binaryX,
+                int *diagnostics,
+                double *percA,
+                double *numNodes,
+                double *numLeaves,
+                double *treeDepth,
+                double *incProp){
     // w is the starting value of latents
 
     //    *w is n_samp x n_dim vector
@@ -216,6 +222,60 @@ extern "C" {
 
     double alpha2, alpha2old, ss;
     int sigdrawcounter = 0;
+
+    int dgn = *diagnostics;
+    //percA[k][i] = percA[k*m + i] = average over all percAtmp for draw i latent k
+    std::vector<std::vector<double> > percAtmp;
+    percAtmp.resize(di.n_dim);
+    //numNodes[k][i] =  numNodes[k*m + i] = average over all numNodestmp for draw i latent k
+    std::vector<std::vector<double> > numNodestmp;
+    numNodestmp.resize(di.n_dim);
+    //numLeaves[k][i] = numLeaves[k*m + i] = average over all numLeavestmp for draw i latent k
+    std::vector<std::vector<double> > numLeavestmp;
+    numLeavestmp.resize(di.n_dim);
+    //treeDepth[k][i] = treeDepth[k*m + i] = average over all treeDepthtmp for draw i latent k
+    std::vector<std::vector<double> > treeDepthtmp;
+    treeDepthtmp.resize(di.n_dim);
+    //nLtD[k][i] = nLtD[k*m + i] = number of leaves at tree depth of the ith tree for the current round of draw of latent k
+    std::vector<std::vector<double> > nLtDtmp;
+    nLtDtmp.resize(di.n_dim);
+
+
+    for(size_t i=0;i<di.n_dim;i++) {
+      percAtmp[i].resize(m);
+      numNodestmp[i].resize(m);
+      numLeavestmp[i].resize(m);
+      treeDepthtmp[i].resize(m);
+      nLtDtmp[i].resize(m);
+    }
+
+    for(size_t k=0; k<di.n_dim; k++){
+      for(size_t i=0;i<m;i++) {
+        percAtmp[k][i] = 0.0;
+        numNodestmp[k][i] = 1.0;
+        numLeavestmp[k][i] = 1.0;
+        treeDepthtmp[k][i] = 0.0;
+        nLtDtmp[k][i] = 1.0;
+      }
+    }
+
+    //incProptmp[j] = count occurence of xj in splitting rules for the current round of draw
+    //incProp[j] = average of incProptmp[j] over all draws
+    std::vector<std::vector<double> > incProptmp;
+    incProptmp.resize(di.n_dim);
+
+    for(size_t i=0; i<di.n_dim; i++){
+      incProptmp[i].resize(di.n_cov);
+    }
+
+    for(size_t k=0; k<di.n_dim; k++){
+      for(size_t i=0;i<di.n_cov;i++) {
+        incProptmp[k][i] = 0.0;
+      }
+    }
+
+    size_t countdgn = 0;
+
     //MCMC
 
 
@@ -286,7 +346,13 @@ extern "C" {
       for(size_t k=0; k<di.n_dim; k++){
         di.y = &r[k][0];
         pi.sigma = sqrt(alpha2) * condsig[k]; //sqrt psi_k tilde
-        bd(XMat[k], t[ntree][k], xi[k], di, pi, minobsnode, binaryX);
+
+        if(dgn){
+          bd1(XMat[k], t[ntree][k], xi[k], di, pi, minobsnode, binaryX, &nLtDtmp[k][ntree], &percAtmp[k][ntree], &numNodestmp[k][ntree], &numLeavestmp[k][ntree], &treeDepthtmp[k][ntree], incProptmp[k]);
+        } else {
+          bd(XMat[k], t[ntree][k], xi[k], di, pi, minobsnode, binaryX);
+        }
+
         fit(t[ntree][k], XMat[k], di, xi[k], ftemp[k]);
         for(size_t i=0;i<di.n_samp;i++) {
           allfit[k][i] += ftemp[k][i]	;
@@ -402,6 +468,34 @@ extern "C" {
 
     /* Make Predictions */
     if(loop>=burn){
+
+      if(dgn){
+        for(size_t k=0;k<di.n_dim;k++){
+          for(size_t i=0;i<m;i++) {
+            percA[countdgn] += percAtmp[k][i];
+            numNodes[countdgn] += numNodestmp[k][i];
+            numLeaves[countdgn] += numLeavestmp[k][i];
+            treeDepth[countdgn] += treeDepthtmp[k][i];
+          }
+          percA[countdgn] /= m;
+          numNodes[countdgn] /= m;
+          numLeaves[countdgn] /= m;
+          treeDepth[countdgn] /= m;
+
+          countdgn++;
+
+          double numsplits = 0;
+          for(size_t i=0; i<di.n_cov; i++){
+            //std::cout<< "loop"<<loop<<" "<<incProptmp[i] <<" \n";
+            numsplits += incProptmp[k][i];
+          }
+          for(size_t i=0; i<di.n_cov; i++){
+            incProp[k*di.n_cov + i] += incProptmp[k][i]/numsplits;//proportion of all splitting rules that uses xi
+          }
+        }//k
+
+      }
+
       dinv(SigmaTmpInv ,di.n_dim,SigmaTmp);
       for(size_t k = 0; k <di.n_samp; k++){
         max_temp = R_NegInf;
@@ -471,6 +565,13 @@ extern "C" {
 
 
     } //end of loop
+
+
+    if(dgn){
+      for(size_t i=0; i<(di.n_dim*di.n_cov); i++){
+        incProp[i] /= nd;
+      }
+    }
 
     int time2 = time(&tp);
     Rprintf("time for mcmc loop %d secs", time2-time1);

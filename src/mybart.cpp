@@ -49,7 +49,6 @@ extern "C" {
       dip.n_samp = *testn; dip.n_cov = *pn_cov; dip.n_dim = 0; dip.y=0;
     }
 
-    int dgn = *diagnostics;
     int nn = *pn; /* nsub */
     int nu = *pnu; /* df in sigma prior */
     double lambda = *plambda; /* param in sigma prior */
@@ -138,6 +137,7 @@ extern "C" {
 
     double ss = 0.0;
 
+    int dgn = *diagnostics;
     //percA[i] = average over all percAtmp for draw i
     std::vector<double> percAtmp;
     percAtmp.resize(m);

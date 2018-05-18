@@ -5,7 +5,7 @@
 \title{Multinomial Probit Bayesian Additive Regression Trees}
 \usage{
 DynMPBART_call(formula, data, base = NULL, test.data = NULL, Prior = NULL,
-  Mcmc = NULL)
+  Mcmc = NULL, diagnostics = TRUE)
 }
 \arguments{
 \item{formula}{response ~ covariates,}
@@ -38,13 +38,24 @@ The components of Mcmc are
 \item sigma0 : The starting value of the covariance matrix of latent variables.
 \item nSigDr: User-specified upper limit to repeated draws of the covariance variance matrix of latent variables in each round of posterior draw when condition 10 in Jiao and van Dyk 2015 is not satisfied. Default 50.
 }}
+
+\item{diagnostics}{Returns convergence diagnostics and variable inclusion proportions if True (default),}
 }
 \value{
 samp_train ndraws x n posterior matrix of the training data outcome,
 
 samp_test ndraws x testn posterior matrix of the test data outcome,
 
-sigmasample posterior samples of the latent variable covariance matrix.
+sigmasample posterior samples of the latent variable covariance matrix,
+#'@return Percent_Acceptance Percent acceptance of Metropolis-Hastings proposals across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Num_Nodes Average number of tree nodes across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Num_Leaves Average number of leaves across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Depth Average tree depth across the ntrees number of trees for each posterior draw after burn-in,
+
+Inclusion_Proportions Predictor inclusion frequencies. Smaller value of ntrees (such as 10, 20, 50, 100) is recommended for the purposes of variable selection.
 }
 \description{
 Multinomial probit modeling using Bayesian Additive Regression Trees for Dynamic Data,

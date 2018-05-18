@@ -4,7 +4,8 @@
 \alias{PBART_call}
 \title{Probit Bayesian Additive Regression Trees}
 \usage{
-PBART_call(formula, data, test.data = NULL, Prior = NULL, Mcmc = NULL)
+PBART_call(formula, data, test.data = NULL, Prior = NULL, Mcmc = NULL,
+  diagnostics = TRUE)
 }
 \arguments{
 \item{formula}{response ~ covariates,}
@@ -28,6 +29,8 @@ The components of Prior are
 }}
 
 \item{Mcmc}{List of MCMC starting values, burn-in ...: e.g.,     list(burn = 100, ndraws = 1000)}
+
+\item{diagnostics}{Returns convergence diagnostics and variable inclusion proportions if True (default),}
 }
 \value{
 treefit_train ndraws x n posterior matrix of the training data sum of trees fit,
@@ -36,7 +39,17 @@ treefit_test ndraws x testn posterior matrix of the test data sum of trees fit,
 
 samp_train ndraws x n posterior matrix of the training data outcome,
 
-samp_test ndraws x testn posterior matrix of the test data outcome.
+samp_test ndraws x testn posterior matrix of the test data outcome,
+
+Percent_Acceptance Percent acceptance of Metropolis-Hastings proposals across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Num_Nodes Average number of tree nodes across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Num_Leaves Average number of leaves across the ntrees number of trees for each posterior draw after burn-in,
+
+Tree_Depth Average tree depth across the ntrees number of trees for each posterior draw after burn-in,
+
+Inclusion_Proportions Predictor inclusion frequencies. Smaller value of ntrees (such as 10, 20, 50, 100) is recommended for the purposes of variable selection.
 }
 \description{
 Bayesian Additive Regression Trees Modeling for Binary Outcome,

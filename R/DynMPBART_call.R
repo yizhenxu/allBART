@@ -26,9 +26,15 @@
 #'\item sigma0 : The starting value of the covariance matrix of latent variables.
 #'\item nSigDr: User-specified upper limit to repeated draws of the covariance variance matrix of latent variables in each round of posterior draw when condition 10 in Jiao and van Dyk 2015 is not satisfied. Default 50.
 #'}
+#'@param diagnostics Returns convergence diagnostics and variable inclusion proportions if True (default),
 #'@return samp_train ndraws x n posterior matrix of the training data outcome,
 #'@return samp_test ndraws x testn posterior matrix of the test data outcome,
-#'@return sigmasample posterior samples of the latent variable covariance matrix.
+#'@return sigmasample posterior samples of the latent variable covariance matrix,
+#'#'@return Percent_Acceptance Percent acceptance of Metropolis-Hastings proposals across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Tree_Num_Nodes Average number of tree nodes across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Tree_Num_Leaves Average number of leaves across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Tree_Depth Average tree depth across the ntrees number of trees for each posterior draw after burn-in,
+#'@return Inclusion_Proportions Predictor inclusion frequencies. Smaller value of ntrees (such as 10, 20, 50, 100) is recommended for the purposes of variable selection.
 #'@examples
 #'##simulate data (example from Friedman MARS paper)
 #'f = function(x){
@@ -73,7 +79,7 @@
 #'@export
 #'@useDynLib allBART
 DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
-                         Prior = NULL, Mcmc = NULL)
+                         Prior = NULL, Mcmc = NULL, diagnostics = TRUE)
 {
   callT <- match.call(expand.dots = TRUE)
 
@@ -251,7 +257,20 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
              sigmasample = sigmasample,
              vec_test = as.integer(rep(0,testnsub*ndraws)),
              vec_train = as.integer(rep(0,n*ndraws)),
-             binaryX = as.integer(binaryX))
+             binaryX = as.integer(binaryX),
+             diagnostics = as.integer(diagnostics),
+             percA = as.double(rep(0, (p-1)*ndraws)),
+             numNodes = as.double(rep(0, (p-1)*ndraws)),
+             numLeaves = as.double(rep(0, (p-1)*ndraws)),
+             treeDepth = as.double(rep(0, (p-1)*ndraws)),
+             incProp = as.double(rep(0, (p-1)*ncol(Data$X))) )
+
+  res$percA = matrix(res$percA, nrow = p-1)
+  res$numNodes = matrix(res$numNodes, nrow = p-1)
+  res$numLeaves = matrix(res$numLeaves, nrow = p-1)
+  res$treeDepth = matrix(res$treeDepth, nrow = p-1)
+  res$incProp = matrix(res$incProp, byrow = T, nrow = p-1)
+  colnames(res$incProp) = xcolnames
 
   relvelved = as.numeric(relvelved)
   vec_class_train <- matrix(relvelved[res$vec_train], nrow = n)
@@ -264,13 +283,34 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
     vec_class_test <- NULL
   }
 
-  if(savesigma){
-    ret = list(samp_test = vec_class_test,
-               samp_train = vec_class_train,
-               sigmasample = res$sigmasample);
+  if(diagnostics){
+    if(savesigma){
+      ret = list(samp_test = vec_class_test,
+                 samp_train = vec_class_train,
+                 sigmasample = res$sigmasample,
+                 Percent_Acceptance = res$percA,
+                 Tree_Num_Nodes = res$numNodes,
+                 Tree_Num_Leaves = res$numLeaves,
+                 Tree_Depth = res$treeDepth,
+                 Inclusion_Proportions = res$incProp);
+    } else {
+      ret = list(samp_test = vec_class_test,
+                 samp_train = vec_class_train,
+                 Percent_Acceptance = res$percA,
+                 Tree_Num_Nodes = res$numNodes,
+                 Tree_Num_Leaves = res$numLeaves,
+                 Tree_Depth = res$treeDepth,
+                 Inclusion_Proportions = res$incProp);
+    }
   } else {
-    ret = list(samp_test = vec_class_test,
-               samp_train = vec_class_train);
+    if(savesigma){
+      ret = list(samp_test = vec_class_test,
+                 samp_train = vec_class_train,
+                 sigmasample = res$sigmasample);
+    } else {
+      ret = list(samp_test = vec_class_test,
+                 samp_train = vec_class_train);
+    }
   }
   return(ret)
 }
