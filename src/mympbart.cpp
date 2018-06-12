@@ -545,8 +545,8 @@ extern "C" {
           rMVN(mvnsample, mvnmean, SigmaTmp,di.n_dim);
 
           for(int l = 0 ; l < *pn_dim; l++){
-            if(mvnmean[l] > max_temp){
-              max_temp = mvnmean[l];
+            if(mvnsample[l] > max_temp){
+              max_temp = mvnsample[l];
               pclass = l+1;
             }
           }
