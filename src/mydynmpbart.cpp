@@ -41,7 +41,8 @@ extern "C" {
                    double *numNodes,
                    double *numLeaves,
                    double *treeDepth,
-                   double *incProp){
+                   double *incProp,
+                   int *treefit){
     // w is the starting value of latents
 
     //    *w is n_samp x n_dim vector
@@ -568,12 +569,22 @@ extern "C" {
 
           rMVN(mvnsample, mvnmean, SigmaTmp,di.n_dim);
 
-          for(int l = 0 ; l < *pn_dim; l++){
-            if(mvnsample[l] > max_temp){
-              max_temp = mvnsample[l];
-              pclass = l+1;
+          if(treefit){
+            for(int l = 0 ; l < *pn_dim; l++){
+              if(mvnmean[l] > max_temp){
+                max_temp = mvnmean[l];
+                pclass = l+1;
+              }
+            }
+          } else {
+            for(int l = 0 ; l < *pn_dim; l++){
+              if(mvnsample[l] > max_temp){
+                max_temp = mvnsample[l];
+                pclass = l+1;
+              }
             }
           }
+
           if(max_temp <=0) {
             pclass = (int)maxy;
           }

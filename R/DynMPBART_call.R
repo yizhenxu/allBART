@@ -79,7 +79,7 @@
 #'@export
 #'@useDynLib allBART
 DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
-                         Prior = NULL, Mcmc = NULL, diagnostics = TRUE)
+                         Prior = NULL, Mcmc = NULL, diagnostics = TRUE, tf = FALSE)
 {
   callT <- match.call(expand.dots = TRUE)
 
@@ -263,7 +263,8 @@ DynMPBART_call  <- function(formula, data, base = NULL,test.data = NULL,
              numNodes = as.double(rep(0, (p-1)*ndraws)),
              numLeaves = as.double(rep(0, (p-1)*ndraws)),
              treeDepth = as.double(rep(0, (p-1)*ndraws)),
-             incProp = as.double(rep(0, (p-1)*ncol(Data$X))) )
+             incProp = as.double(rep(0, (p-1)*ncol(Data$X))),
+             treefit = as.integer(tf))
 
   res$percA = matrix(res$percA, nrow = p-1)
   res$numNodes = matrix(res$numNodes, nrow = p-1)
